@@ -3,7 +3,7 @@ Section: utils
 Priority: optional
 Maintainer: Python Applications Packaging Team <python-apps-team@lists.alioth.debian.org>
 Uploaders: Otto Kekäläinen <otto@debian.org>
-Build-Depends: debhelper (>= 9),
+Build-Depends: debhelper-compat (= 9),
                dh-python,
                librsync-dev (>= 2.0),
                python-all-dev,
