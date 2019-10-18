@@ -1,6 +1,7 @@
 rdiff-backup (1.3.3-2) UNRELEASED; urgency=medium
 
   * Use debhelper-compat instead of debian/compat.
+  * Bump Standards-Version to 4.4.1.
 
  -- Ondřej Nový <onovy@debian.org>  Sun, 25 Aug 2019 16:45:33 +0200
 
