@@ -1,3 +1,90 @@
+New in v2.0.0 (2020-03-15)
+--------------------------
+
+## Changes
+
+* FIX: Add workaround to avoid error when backup directory is under the source directory (see issue #296), there is a warning but the backup can succeed.
+* FIX: bytestotime() should return None on decode failure (Closes #295)
+* NEW: add a unit test for bytestotime() in order to avoid a regression like issue #295.
+
+## Authors
+
+* Eric L
+* zjw
+
+New in v1.9.2rc0 (2020-03-08)
+-----------------------------
+
+## Changes
+
+* FIX: UpdateError: Updated mirror temp file does not match source, Closes #237
+* CHG: Add new logo and improve visual appeal of the README (Closes: #286) (#287)
+* NEW: Add Windows developments documentations, closes #220
+* FIX: do not fail when starting with uid/gid equal to maximum, avoid OverflowError on os.chown
+
+## Authors
+
+* Eric L
+* Patrik Dufresne
+* zjw
+
+New in v1.9.1b0 (2020-02-23)
+----------------------------
+
+## Changes
+
+* FIX: remove too specific Debian packages from GitHub deployment, closes #263
+* NEW: add a new tool to help generate the changelog (description in DEVELOP.md)
+* DOC: new release rules and procedure added to docs/DEVELOP.md
+* FIX: avoid double unquoting of increment file infos, closes #266
+* FIX: versioning of Debian packages follows without glitch the overall tag based versioning.
+* DEV: automate via Travis deployment pipeline release to PyPI and Test PyPI.
+* FIX: remove some more ugly bytes output in strings using _safe_str, closes #238
+* FIX: added and moved hardlinks were not correctly counted and restored, Closes #239
+* FIX: rdiff-backup complained about missing SHA checksums of hardlinks, Closes #78
+* FIX: avoid int is not iterable error when calling remote command on Windows
+* DEV: flake8 checks only setup.py, src, testing and tools code.
+* NEW: add support for SOURCE_DATE_EPOCH to override the build date, making reproducible builds possible.
+* NEW: sparse files are handled more efficiently, if not compressed and depending on file system
+
+## Authors
+
+* Bernhard M. Wiedemann
+* Eric L
+* Otto Kekäläinen
+* Patrik Dufresne
+* Stefan Seyfried
+* zjw
+
+
+New in v1.9.0b0 (2020-01-31)
+----------------------------
+
+Different bug fixes, improvements in code and documentation - too many to list
+(Andreas Olsson, Andrew Foster, Arrigo Marchiori, bigbear3001, davekempe,
+David I. Lehn, elMor3no, Eric Lavarde, Frank Crawford, Jiri Lunacek, joshn, Josh Soref,
+mestre, Oliver Lowe, orangenschalen, Otto Kekäläinen, owsla, Patrik Dufresne, Reio Remma,
+Rodrigo Silva, Stefan Seyfried, Wes Cilldhaire, zjw)
+
+Add automated of different package formats (Otto Kekäläinen, Arrigo Marchiori, Eric Lavarde)
+
+Add RDIFF_BACKUP_VERBOSITY environment variable (Eric Lavarde)
+
+Add support for Python 3.5 to 3.8, remove support for Python 2.x (Eric Lavarde)
+
+Fix OverflowError on 64-bit systems when backing up symlinks with uid or gid
+above INT_MAX. Thanks to Michel Le Cocq for the bug report. (Andrew Ferguson)
+
+Start using Unicode internally for filenames. This fixes Unicode support
+on Windows (Josh Nisly)
+
+Don't print "Fatal Error" if --check-destination-dir completed successfully.
+Thanks to Serge Zub for the suggestion. (Andrew Ferguson)
+
+Allow --test-server option to be combined with --restrict. Thanks to Nick
+Moffitt for reporting the error. Closes Ubuntu bug  #349072. (Andrew Ferguson)
+
+
 New in v1.3.3 (2009/03/16)
 ---------------------------
 
@@ -298,7 +385,7 @@ when printing them in log messages from eas_acls.py. (Fix from
 Saptarshi Guha)
 
 Handle Windows' lack of getuid(), getgid(), hardlinks and symlinks in
-fs_abilities.py. Use subproces.Popen() on Windows since it does not support
+fs_abilities.py. Use subprocess.Popen() on Windows since it does not support
 os.popen2(). (Patch from Josh Nisly)
 
 Let setup.py accept arguments on Windows. (Patch from Josh Nisly)
@@ -507,7 +594,7 @@ quoting to work properly with cygwin.  (Marc Dyksterhouse)
 Allow for preservation of FinderInfo for folders and fix typo
 in Time.py. (Patch from Andrew Ferguson.)
 
-Test for symlink permissions support to avoid unncessary syscalls on
+Test for symlink permissions support to avoid unnecessary syscalls on
 platforms that don't support them. (Patch from Andrew Ferguson.)
 
 RPM specfile update from Gordon Rowell.
@@ -838,7 +925,7 @@ intended and documented but not very convenient.  Thanks to Oliver
 Kaltenecker for bug report.
 
 Fixed error when --restrict path given with trailing backslash.  Bug
-report by �ke Br�nnstr�m.
+report by Åke Brännström.
 
 Fixed many functions like --list-increments, --remove-older-than,
 etc. which previously didn't work with filename quoting.  Thanks to
@@ -1205,7 +1292,7 @@ sockets, and device files.
 
 --windows-mode is now short for --windows-time-format --chars-to-quote
 A-Z: --no-hard-links --exclude-special-files.  Thanks to Paul-Erik
-T�rr�nen for some helpful windows info.
+Törrönen for some helpful windows info.
 
 Multiple --include and --exclude statements can now be given in a
 single file.  See the documentation on
@@ -1215,7 +1302,7 @@ pointing out that command line length could otherwise be a problem.
 Fixed bug in filelist processing that ignored leading or trailing
 whitespace in filelists.  Now filenames with, for instance, trailing
 spaces can be used in filelists.  Filelists which took advantage of
-this bug for formatting may have to be editted.
+this bug for formatting may have to be edited.
 
 Applied major/minor patch contributed by David S.  rdiff-backup should
 now correctly copy device files on platforms such as NetBSD.
@@ -1564,7 +1651,7 @@ New in v0.5.2 (2002/03/02)
 Fixed bugs which made rdiff-backup try to preserve mod times when it
 wasn't necessary, and exit instead of warning when it wasn't being run
 as root and found a file it didn't own.  (Reported by Alberto
-Accomazi.)
+Accomazzi.)
 
 Added some more error checking; maybe this will fix a bug reported by
 John Goerzen wherein rdiff-backup can crash if file is deleted while
@@ -1782,7 +1869,7 @@ New in v0.3.0 (2001/9/9 - Billennium edition)
 rdiff-backup has been almost completely rewritten for v0.3.0, as it
 was for v0.1.0.  The main problem with versions 0.2.x was that the
 networking code was added to the not-remote-capable v0.1, and the
-result was unyieldy and prone to bugs when operating over a pipe.
+result was unwieldy and prone to bugs when operating over a pipe.
 
 There are some new features:
 
@@ -1798,7 +1885,7 @@ There are some new features:
   bothered. :-)
 
 - New more standard format for increment files.  See
-  http://www.w3.org/TR/NOTE-datetime for the time standard.  The old
+  https://www.w3.org/TR/NOTE-datetime for the time standard.  The old
   format, besides being less standard, didn't take timezones into
   account.
 
