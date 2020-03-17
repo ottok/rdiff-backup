@@ -3,12 +3,14 @@ Section: utils
 Priority: optional
 Maintainer: Python Applications Packaging Team <python-apps-team@lists.alioth.debian.org>
 Uploaders: Otto Kekäläinen <otto@debian.org>
-Build-Depends: debhelper-compat (= 9),
+Build-Depends: debhelper (>= 11),
                dh-python,
-               librsync-dev (>= 2.0),
-               python-all-dev,
-               python-pylibacl,
-               python-pyxattr
+               librsync-dev,
+               python3-all-dev,
+               python3-pylibacl,
+               python3-pyxattr,
+               python3-setuptools,
+               python3-setuptools-scm
 Standards-Version: 4.4.1
 Homepage: https://rdiff-backup.net/
 Vcs-Git: https://salsa.debian.org/python-team/applications/rdiff-backup.git
@@ -17,10 +19,10 @@ Vcs-Browser: https://salsa.debian.org/python-team/applications/rdiff-backup
 Package: rdiff-backup
 Architecture: any
 Depends: ${misc:Depends},
-         ${python:Depends},
+         ${python3:Depends},
          ${shlibs:Depends}
-Recommends: python-pylibacl,
-            python-pyxattr
+Recommends: python3-pylibacl,
+            python3-pyxattr
 Description: remote incremental backup
  rdiff-backup backs up one directory to another, possibly over a network. The
  target directory ends up a copy of the source directory, but extra reverse
