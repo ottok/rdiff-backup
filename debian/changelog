@@ -1,14 +1,24 @@
-rdiff-backup (1.3.3-2) UNRELEASED; urgency=medium
+rdiff-backup (2.0.0-1) unstable; urgency=medium
+
+  [ Otto Kekäläinen ]
+  * New upstream version 2.0.0
+    - Now fully Python 3 compatible
+    - Sparse files handling has become more efficient on file systems
+      which support it
+    - More compressed file formats are kept as-is
+    - Have a look at the |--no-fsync| option to improve speed of backup
+      (at the slight risk of data loss)
+    - Reproducible builds are possible
+    - See rdiff-backup.net for more information on 2.0 features
 
   [ Ondřej Nový ]
   * Use debhelper-compat instead of debian/compat.
   * Bump Standards-Version to 4.4.1.
 
   [ Sandro Tosi ]
-  * debian/control
-    - update Homepage field; Closes: #944429
+  * Update Homepage field to rdiff-backup.net (Closes: #944429)
 
- -- Sandro Tosi <morph@debian.org>  Sat, 01 Feb 2020 16:16:10 -0500
+ -- Otto Kekäläinen <otto@debian.org>  Tue, 17 Mar 2020 03:02:16 +0200
 
 rdiff-backup (1.3.3-1) unstable; urgency=medium
 
