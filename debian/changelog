@@ -1,0 +1,5 @@
+rdiff-backup (1.9.0b0) unstable; urgency=medium
+
+  * Initial changelog entry for native rdiff-backup packaging.
+
+ -- Otto Kekäläinen <otto@debian.org>  Fri, 02 Aug 2019 21:01:40 +0100
