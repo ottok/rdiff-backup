@@ -115,7 +115,7 @@ def RORP2Record(rorpath):
         # If there is a resource fork, save it.
         if rorpath.has_resource_fork():
             if not rorpath.get_resource_fork():
-                rf = "None"
+                rf = b"None"
             else:
                 rf = binascii.hexlify(rorpath.get_resource_fork())
             str_list.append(b"  ResourceFork %b\n" % (rf, ))
@@ -202,7 +202,7 @@ def Record2RORP(record_string):
             data_dict['size'] = int(data)
         elif field == "ResourceFork":
             if data == b"None":
-                data_dict['resourcefork'] = ""
+                data_dict['resourcefork'] = b""
             else:
                 data_dict['resourcefork'] = binascii.unhexlify(data)
         elif field == "CarbonFile":
@@ -726,8 +726,34 @@ class PatchDiffMan(Manager):
         if prefix not in self.prefixmap:
             return []
         sortlist = [(rp.getinctime(), rp) for rp in self.prefixmap[prefix]]
-        sortlist.sort()
-        sortlist.reverse()
+
+        # we sort before we validate against duplicates so that we tell
+        # first about the youngest case of duplication
+        sortlist.sort(reverse=True, key=lambda x: x[0])
+
+        # we had cases where the timestamp of the metadata files were
+        # duplicates, we need to fail or at least warn about such cases
+        unique_set = set()
+        for (time, rp) in sortlist:
+            if time in unique_set:
+                if Globals.allow_duplicate_timestamps:
+                    log.Log("Warning: metadata file '%s' has a duplicate "
+                            "timestamp date, you might not be able to "
+                            "recover files on or earlier than this date. "
+                            "Assuming you're in the process of cleaning up "
+                            "your repository." %
+                            rp.get_safepath(), 2)
+                else:
+                    log.Log.FatalError(
+                        "Metadata file '%s' has a duplicate timestamp date, "
+                        "you might not be able to recover files on or earlier "
+                        "than this date. "
+                        "Check the man page on how to clean up your repository "
+                        "using the '--allow-duplicate-timestamps' option." %
+                        rp.get_safepath())
+            else:
+                unique_set.add(time)
+
         return [rp for (time, rp) in sortlist if time >= min_time]
 
     def check_needs_diff(self):

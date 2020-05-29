@@ -1349,6 +1349,8 @@ class RPath(RORPath):
             b'', *[x for x in self.path.split(b"/") if x and x != b"."])
         if self.path[0:1] == b"/":
             newpath = b"/" + newpath
+            if self.path[1:2] == b"/" and self.path[2:3].isalnum():  # we assume a Windows share
+                newpath = b"/" + newpath
         elif not newpath:
             newpath = b"."
         return self.newpath(newpath)
@@ -1688,11 +1690,11 @@ class RPath(RORPath):
         except KeyError:
             try:
                 rfork_fp = self.conn.open(
-                    os.path.join(self.path, '..namedfork', 'rsrc'), 'rb')
+                    os.path.join(self.path, b'..namedfork', b'rsrc'), 'rb')
                 rfork = rfork_fp.read()
                 assert not rfork_fp.close()
             except (IOError, OSError):
-                rfork = ''
+                rfork = b''
             self.data['resourcefork'] = rfork
         return rfork
 
@@ -1700,7 +1702,7 @@ class RPath(RORPath):
         """Write new resource fork to self"""
         log.Log("Writing resource fork to %s" % (self.index, ), 7)
         fp = self.conn.open(
-            os.path.join(self.path, '..namedfork', 'rsrc'), 'wb')
+            os.path.join(self.path, b'..namedfork', b'rsrc'), 'wb')
         fp.write(rfork_data)
         assert not fp.close()
         self.set_resource_fork(rfork_data)

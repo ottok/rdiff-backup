@@ -402,6 +402,7 @@ probably isn't what you meant.""" % (self.selection_functions[-1].name, ))
         something_excluded, tuple_list = None, []
         separator = Globals.null_separator and b"\0" or b"\n"
         for line in filelist_fp.read().split(separator):
+            line = line.rstrip(b'\r')  # for Windows/DOS endings
             if not line:
                 continue  # skip blanks
             try:
@@ -478,6 +479,7 @@ probably isn't what you meant.""" % (self.selection_functions[-1].name, ))
         log.Log("Reading globbing filelist %s" % list_name, 4)
         separator = Globals.null_separator and b"\0" or b"\n"
         for line in filelist_fp.read().split(separator):
+            line = line.rstrip(b'\r')  # for Windows/DOS endings
             if not line:
                 continue  # skip blanks
             if line[:2] == b"+ ":
@@ -742,9 +744,9 @@ probably isn't what you meant.""" % (self.selection_functions[-1].name, ))
         by Donovan Baarda.
 
         """
-        i, n, res = 0, len(pat), ''
         # trying to analyze bytes would be quite complicated hence back to str
         str_pat = os.fsdecode(pat)
+        i, n, res = 0, len(str_pat), ''
         while i < n:
             c, s = str_pat[i], str_pat[i:i + 2]
             i = i + 1
