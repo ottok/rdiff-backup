@@ -99,6 +99,28 @@ In versioning we utilize git tags as understood by
 Version strings follow the [PEP-440
 standard](https://www.python.org/dev/peps/pep-0440/).
 
+The rules are currently as follows (check the `.travis.yml` file for details):
+
+- all commits tagged with an underscore at the end or with a tag looking like a
+  version number (i.e. as in next two bullets) are released to
+  [GitHub](https://github.com/rdiff-backup/rdiff-backup/releases/).
+- all commits tagged with alpha, beta, rc or final format are released to
+  [PyPI](https://pypi.org/project/rdiff-backup/#history), i.e. the ones looking
+  like: vX.Y.ZaN (alpha), vX.Y.ZbN (beta), vX.Y.ZrcN (release candidate) or
+  vX.Y.Z (final).
+- all commits where the "version tag" is a development one, i.e. like previously
+  with an additional `.devM` at the end, are released to 
+  [Test PyPI](https://test.pypi.org/project/rdiff-backup/#history).
+  They are meant mostly to test the deployment itself (use alpha versions to
+  release development code).
+
+> **NOTE:** the GitHub releases are created as draft, meaning that a maintainer
+>	must review them and publish them before they become visible.
+
+> **CAUTION:** due to a bug in Travis CI, the Windows wheel can't currently be
+>	published to PyPI and needs to be downloaded from GitHub and manually
+>	uploaded to PyPI.
+
 ## Releases
 
 There is no prior release schedule – they are made when deemed fit.
@@ -183,7 +205,7 @@ Administrators, located at https://docs.python.org/3/install/index.html
 
 > **NOTE:** There is no uninstall command provided by the Python
 distutils/setuptools system. One strategy is to use the `python3 setup.py
-install --record <file>` option to save a list of the files installed to <file>,
+install --record <file>` option to save a list of the files installed to `<file>`,
 another is to created a wheel package with `python3 setup.py bdist_wheel`,
 as it can be installed and deinstalled.
 
@@ -362,7 +384,7 @@ Given the above rules, a release cycle looks roughly as follows:
 
 1. Call `./tools/get_changelog_since.sh PREVIOUSTAG` to get a list of changes
    (see above) since the last release and a sorted and unique list of authors,
-   on which basis you can extend the [CHANGELOG](../CHANGELOG) for the
+   on which basis you can extend the [CHANGELOG](../CHANGELOG.md) for the
    new release.
    **IMPORTANT:** make sure that the PR is squashed or you won't be able to
    trigger the release pipeline via a tag on master.

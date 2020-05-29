@@ -175,6 +175,12 @@ escape_trailing_spaces = os.name == 'nt'
 # don't need to be escaped on Windows.
 use_compatible_timestamps = 0
 
+# Normally there shouldn't be any case of duplicate timestamp but it seems
+# we had the issue at some point in time, hence we need the flag to allow
+# users to clean up their repository. The default is to abort on such cases.
+
+allow_duplicate_timestamps = False
+
 # If true, emit output intended to be easily readable by a
 # computer.  False means output is intended for humans.
 parsable_output = None
@@ -196,7 +202,7 @@ compression = 1
 # compiled version of the first.
 no_compression_regexp_string = (
     b"(?i).*\\.(gz|z|bz|bz2|tgz|zip|zst|rpm|deb|"
-    b"jpg|jpeg|gif|png|jp2|mp3|mp4|ogg|avi|wmv|mpeg|mpg|rm|mov|flac|shn|pgp|"
+    b"jpg|jpeg|gif|png|jp2|mp3|mp4|ogg|ogv|oga|ogm|avi|wmv|mpeg|mpg|rm|mov|mkv|flac|shn|pgp|"
     b"gpg|rz|lz4|lzh|lzo|zoo|lharc|rar|arj|asc|vob|mdf)$")
 no_compression_regexp = None
 
