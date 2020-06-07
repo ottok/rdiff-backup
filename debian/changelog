@@ -1,4 +1,4 @@
-rdiff-backup (2.0.3-1) unstable; urgency=medium
+rdiff-backup (2.0.3-1) UNRELEASED; urgency=medium
 
   [ Otto Kekäläinen ]
   * Update packaging for Python 3 era and compat 11
@@ -6,14 +6,12 @@ rdiff-backup (2.0.3-1) unstable; urgency=medium
   [ Pablo Mestre Drake ]
   * New upstream version 2.0.3
   * Add hardening in debian/rules
-  * Remove extra license file (COPYING.gz)
   * debian/control
     - Migrate from debhelper 11 to debhelper-compat 13
     - Migrate from Standards-Version 4.4.1 to 4.5.0
     - Add Rules-Requires-Root
     - Update mailing list url
   * Update copyright
-  * New upstream version 2.0.3
 
  -- Pablo Mestre Drake <pmdcuba@gmail.com>  Fri, 29 May 2020 14:57:09 -0300
 
