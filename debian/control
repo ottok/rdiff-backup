@@ -19,7 +19,8 @@ Rules-Requires-Root: no
 
 Package: rdiff-backup
 Architecture: any
-Depends: ${misc:Depends},
+Depends: python3-setuptools,
+         ${misc:Depends},
          ${python3:Depends},
          ${shlibs:Depends}
 Recommends: python3-pylibacl,
