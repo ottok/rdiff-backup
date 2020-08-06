@@ -1,7 +1,9 @@
-rdiff-backup (2.0.3-1) UNRELEASED; urgency=medium
+rdiff-backup (2.0.5-1) unstable; urgency=medium
 
   [ Otto Kekäläinen ]
+  * New upstream version 2.0.5
   * Update packaging for Python 3 era and compat 11
+  * Add python3-setuptools as a run-time dependency so --version works
 
   [ Pablo Mestre Drake ]
   * New upstream version 2.0.3
@@ -13,7 +15,7 @@ rdiff-backup (2.0.3-1) UNRELEASED; urgency=medium
     - Update mailing list url
   * Update copyright
 
- -- Pablo Mestre Drake <pmdcuba@gmail.com>  Fri, 29 May 2020 14:57:09 -0300
+ -- Otto Kekäläinen <otto@debian.org>  Thu, 06 Aug 2020 06:36:34 +0300
 
 rdiff-backup (2.0.0-1) unstable; urgency=medium
 
