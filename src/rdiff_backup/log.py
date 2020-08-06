@@ -26,13 +26,16 @@ import re
 import os  # needed to grab verbosity as environment variable
 from . import Globals, rpath
 
-# FIXME Dirty hack in order to make sure that log files are written in Unicode
-# format because else they are written as cp1252 under Windows
-# Influences program-wide all writing in text mode, not binary.
-if os.name == "nt":
-    import _locale
-    _locale._gdl_bak = _locale._getdefaultlocale
-    _locale._getdefaultlocale = (lambda *args: (_locale._gdl_bak()[0], 'utf8'))
+LOGFILE_ENCODING = 'utf-8'
+
+
+def _to_bytes(logline, encoding=LOGFILE_ENCODING):
+    """
+    Convert string into bytes for logging into file.
+    """
+    assert logline
+    assert isinstance(logline, str)
+    return logline.encode(encoding, 'backslashreplace')
 
 
 class LoggerError(Exception):
@@ -90,7 +93,7 @@ class Logger:
         """Open logfile locally - should only be run on one connection"""
         assert rpath.conn is Globals.local_connection
         try:
-            self.logfp = rpath.open("a")
+            self.logfp = rpath.open("ab")
         except (OSError, IOError) as e:
             raise LoggerError(
                 "Unable to open logfile %s: %s" % (rpath.path, e))
@@ -154,9 +157,7 @@ class Logger:
         if self.log_file_open:
             if self.log_file_local:
                 tmpstr = self.format(message, self.verbosity)
-                if type(tmpstr) != str:  # transform bytes into string
-                    tmpstr = str(tmpstr, 'utf-8')
-                self.logfp.write(tmpstr)
+                self.logfp.write(_to_bytes(tmpstr))
                 self.logfp.flush()
             else:
                 self.log_file_conn.log.Log.log_to_file(message)
@@ -164,13 +165,11 @@ class Logger:
     def log_to_term(self, message, verbosity):
         """Write message to stdout/stderr"""
         if verbosity <= 2 or Globals.server:
-            termfp = sys.stderr
+            termfp = sys.stderr.buffer
         else:
-            termfp = sys.stdout
+            termfp = sys.stdout.buffer
         tmpstr = self.format(message, self.term_verbosity)
-        if type(tmpstr) != str:  # transform bytes in string
-            tmpstr = str(tmpstr, 'utf-8')
-        termfp.write(tmpstr)
+        termfp.write(_to_bytes(tmpstr, encoding=sys.stdout.encoding))
 
     def conn(self, direction, result, req_num):
         """Log some data on the connection
@@ -269,7 +268,7 @@ class ErrorLog:
         assert not cls._log_fileobj, "log already open"
         assert Globals.isbackup_writer
 
-        base_rp = Globals.rbdir.append("error_log.%s.data" % (time_string, ))
+        base_rp = Globals.rbdir.append("error_log.%s.data" % time_string)
         if compress:
             cls._log_fileobj = rpath.MaybeGzip(base_rp)
         else:
@@ -291,14 +290,12 @@ class ErrorLog:
                 error_type, rp, exc)
         logstr = cls.get_log_string(error_type, rp, exc)
         Log(logstr, 2)
-        if isinstance(logstr, bytes):
-            logstr = logstr.decode('utf-8')
         if Globals.null_separator:
             logstr += "\0"
         else:
             logstr = re.sub("\n", " ", logstr)
             logstr += "\n"
-        cls._log_fileobj.write(logstr)
+        cls._log_fileobj.write(_to_bytes(logstr))
 
     @classmethod
     def get_indexpath(cls, obj):
