@@ -1,8 +1,13 @@
 rdiff-backup (2.0.5-2) UNRELEASED; urgency=low
 
+  [ Debian Janitor ]
   * Set upstream metadata fields: Bug-Submit, Repository.
   * Remove obsolete field Name from debian/upstream/metadata (already present in
     machine-readable debian/copyright).
+
+  [ Ondřej Nový ]
+  * d/control: Update Vcs-* fields with new Debian Python Team Salsa
+    layout.
 
  -- Debian Janitor <janitor@jelmer.uk>  Wed, 02 Sep 2020 21:39:20 -0000
 
