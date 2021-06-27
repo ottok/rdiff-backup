@@ -1,0 +1,18 @@
+rdiff-backup (2.0.5-2) unstable; urgency=medium
+
+    The network protocol of versions 1 and 2 of rdiff-backup are incompatible.
+    This means that you must be running the same version (either 1 or 2) of
+    rdiff-backup locally and remotely. Since Buster ships version 1.2.8 and
+    Bullseye ships version 2.0.5, upgrading only the local system or only the
+    remote system from Buster to Bullseye will break rdiff-backup runs between
+    the two.
+
+    For conveniency, version 2.0.5 of rdiff-backup is available in the
+    buster-backports distribution, see https://backports.debian.org/
+    This allows to first upgrade only the rdiff-backup package on Buster
+    systems, and then independently upgrade systems to Bullseye at your
+    convenience.
+
+ -- Samuel Thibault <sthibault@debian.org>  Sun, 27 Jun 2021 22:47:12 +0200
+
+

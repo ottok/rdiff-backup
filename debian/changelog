@@ -1,18 +1,9 @@
-rdiff-backup (2.0.5-2) UNRELEASED; urgency=low
+rdiff-backup (2.0.5-2) unstable; urgency=medium
 
-  [ Debian Janitor ]
-  * Set upstream metadata fields: Bug-Submit, Repository.
-  * Remove obsolete field Name from debian/upstream/metadata (already present in
-    machine-readable debian/copyright).
+  * NEWS: Notify users that the network protocol of versions 1 and 2 of
+    rdiff-backup are incompatible (Closes: #975270).
 
-  [ Ondřej Nový ]
-  * d/control: Update Vcs-* fields with new Debian Python Team Salsa
-    layout.
-
-  [ Otto Kekäläinen ]
-  * Set correct Maintainer as announced on mailing list (Closes: #967997)
-
- -- Debian Janitor <janitor@jelmer.uk>  Wed, 02 Sep 2020 21:39:20 -0000
+ -- Samuel Thibault <sthibault@debian.org>  Sun, 27 Jun 2021 22:47:12 +0200
 
 rdiff-backup (2.0.5-1) unstable; urgency=medium
 
