@@ -1,3 +1,19 @@
+rdiff-backup (2.0.5-3) unstable; urgency=low
+
+  [ Debian Janitor ]
+  * Set upstream metadata fields: Bug-Submit, Repository.
+  * Remove obsolete field Name from debian/upstream/metadata (already present in
+    machine-readable debian/copyright).
+
+  [ Ondřej Nový ]
+  * d/control: Update Vcs-* fields with new Debian Python Team Salsa
+    layout.
+
+  [ Otto Kekäläinen ]
+  * Set correct Maintainer as announced on mailing list (Closes: #967997)
+
+ -- Sandro Tosi <morph@debian.org>  Sat, 21 Aug 2021 01:01:27 -0400
+
 rdiff-backup (2.0.5-2) unstable; urgency=medium
 
   * NEWS: Notify users that the network protocol of versions 1 and 2 of
