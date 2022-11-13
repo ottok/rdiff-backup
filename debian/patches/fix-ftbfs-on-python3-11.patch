@@ -1,0 +1,47 @@
+Description: fix ftbfs on python3.11
+Author:  Frank Crawford <frank@crawford.emu.id.au>
+Origin: https://github.com/rdiff-backup/rdiff-backup/pull/655
+Bug: https://github.com/rdiff-backup/rdiff-backup/issues/633
+Applied-Upstream: https://github.com/rdiff-backup/rdiff-backup/pull/655
+Last-Update: 2022-11-13
+---
+This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
+--- a/src/_librsyncmodule.c
++++ b/src/_librsyncmodule.c
+@@ -24,6 +24,15 @@
+ #include <Python.h>
+ #include <librsync.h>
+ #define RS_JOB_BLOCKSIZE 65536
++/* ----------------------------------------------------------------------- *
++ * Update for Python 3.11 - Contributed by Victor Stinner in bpo-39573.
++ * Compatibility macro for older Python versions.
++ * ----------------------------------------------------------------------- */
++#if PY_VERSION_HEX < 0x030900A4 && !defined(Py_SET_TYPE)
++static inline void _Py_SET_TYPE(PyObject *ob, PyTypeObject *type)
++{ ob->ob_type = type; }
++#define Py_SET_TYPE(ob, type) _Py_SET_TYPE((PyObject*)(ob), type)
++#endif
+ 
+ static PyObject *librsyncError;
+ 
+@@ -352,7 +361,7 @@
+ };
+ 
+ 
+-/* --------------- PatchMaker Object for incremental patching 
++/* --------------- PatchMaker Object for incremental patching
+ 
+    Librsync needs a FILE* handle, but Python only gives us file
+    descriptors (int); we need fdopen() to convert a fd to a FILE*
+@@ -540,8 +549,9 @@
+ {
+   PyObject *m, *d;
+ 
+-  Py_TYPE(&_librsync_SigMakerType) = &PyType_Type;
+-  Py_TYPE(&_librsync_DeltaMakerType) = &PyType_Type;
++  /* Update for Python 3.11 - bpo-39573. */
++  Py_SET_TYPE(&_librsync_SigMakerType, &PyType_Type);
++  Py_SET_TYPE(&_librsync_DeltaMakerType, &PyType_Type);
+   static struct PyModuleDef librsync_def = {
+             PyModuleDef_HEAD_INIT, "_librsync", "RSync Lib", -1, _librsyncMethods, };
+   m = PyModule_Create(&librsync_def);

@@ -1,3 +1,9 @@
+rdiff-backup (2.0.5-4) unstable; urgency=medium
+
+  * Fix FTBFS with Python 3.11. (Closes: #1023946).
+
+ -- Bo YU <tsu.yubo@gmail.com>  Sun, 13 Nov 2022 21:31:00 +0800
+
 rdiff-backup (2.0.5-3) unstable; urgency=low
 
   [ Debian Janitor ]
