@@ -12,7 +12,7 @@ Build-Depends: debhelper-compat (= 13),
                python3-pyxattr,
                python3-setuptools,
                python3-setuptools-scm
-Standards-Version: 4.5.0
+Standards-Version: 4.6.1
 Homepage: https://rdiff-backup.net/
 Vcs-Git: https://salsa.debian.org/python-team/applications/rdiff-backup.git
 Vcs-Browser: https://salsa.debian.org/python-team/applications/rdiff-backup
