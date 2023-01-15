@@ -4,7 +4,8 @@ Priority: optional
 Maintainer: Debian Python Team <team+python@tracker.debian.org>
 Uploaders: Otto Kekäläinen <otto@debian.org>,
            Pablo Mestre Drake <pmdcuba@gmail.com>
-Build-Depends: debhelper-compat (= 13),
+Build-Depends: asciidoctor,
+               debhelper-compat (= 13),
                dh-python,
                librsync-dev,
                python3-all-dev,
