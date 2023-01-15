@@ -1,0 +1,188 @@
+= rdiff-backup: {page-name}
+:page-name: Windows Development Guide
+:pp: {plus}{plus}
+:sectnums:
+:toc: macro
+
+link:.[Home,role="button round"] // *{page-name}*
+
+'''''
+
+toc::[]
+
+
+Some notes for developers and other people willing to help development on Windows platform, or simply compile rdiff-backup from source code on Windows.
+
+See also: https://wiki.python.org/moin/WindowsCompilers
+
+== Pre-requisites
+
+Here the list of required component to be install to start developing rdiff-backup on Windows platform.
+
+TIP: all these steps are packed into the https://ansible.com[Ansible] playbook `playbook-provision.yml` in the `tools/windows` directory, so that it becomes easy to do it automatically.
+
+=== Upgrade your Windows OS
+
+Don't overlook this step.
+Visual Studio required an upgraded OS.
+Use Windows Update to upgrade your system.
+Then proceed with the installation.
+
+=== Install Chocolatey
+
+You can install all the dependencies on your own, but https://chocolatey.org/[Chocolatey] makes it much easier and repeatable.
+Hence our recommendation to https://chocolatey.org/install[install it].
+
+NOTE: the Ansible module https://docs.ansible.com/ansible/latest/collections/chocolatey/chocolatey/win_chocolatey_module.html[win_chocolatey] will install Chocolatey transparently if it isn't already done.
+
+=== Install all tools using Chocolatey
+
+Install first the following packages (if there are no comments, the defaults are just fine):
+
+- git
+- 7zip
+- cmake, with something like `choco install cmake --install-arguments="ADD_CMAKE_TO_PATH=System"`
+- python3, with something like `choco install python3 --version ${PYTHON_VERSION} --params "/InstallDir:C:\Python64 /InstallDir32:C:\Python32"`
+- ruby
+- dotnetfx
+- vcredist140
+
+Optionally you can also install:
+
+- cygwin, because it makes Windows bearable for Linux-aficionados
+- cyg-get (depends on cygwin)
+- vscode, Visual Studio Code (editor)
+
+Then reboot, and continue with:
+
+- visualstudio2022buildtools
+- visualstudio2022-workload-python
+- visualstudio2022-workload-vctools
+
+A last reboot is recommended here to make sure you've got the correct PATH.
+
+=== Python dependencies
+
+Once python is installed, you should have a `pip` available from command line.
+Open a terminal and execut the following commands to install the dependencies required to compile and run rdiff-backup.
+
+  pip.exe install --upgrade pywin32 pyinstaller wheel certifi setuptools-scm tox PyYAML
+
+You could verify if packages are properly installed using:
+
+  python.exe -c 'import pywintypes, winnt, win32api, win32security, win32file, win32con'
+
+IMPORTANT: you will want to do this once for the 32 bits and once for the 64 bits version of Python.
+Check the script `tools/win_provision.sh` for an example on how to do this.
+
+TIP: You can even call the script directly under Windows using the bash shell coming with Git, installed as `C:/Program Files/Git/bin/bash.exe`.
+
+=== Install asciidoctor
+
+This is required to render the documentation:
+
+  gem.cmd install asciidoctor
+
+
+== Build, test and package librsync and rdiff-backup
+
+You can simply call the following scripts, again using Git's bash shell, where `arch` is either `32` or `64`:
+
+  tools/win_build_librsync.sh ${arch} ${WIN_LIBRSYNC_VERSION}
+  tools/win_build_rdiffbackup.sh ${arch} ${WIN_PYTHON_VERSION} yes
+  tools/win_test_rdiffbackup.sh ${arch} ${WIN_PYTHON_VERSION} yes
+  tools/win_package_rdiffbackup.sh ${arch}
+
+TIP: again, under `tools/windows`, the playbooks `playbook-pipeline.yml` shows how it can be automated using Ansible.
+Similarly you can also check `.github/workflows/test_windows.yml` for details of our pipeline.
+
+== Troubleshooting
+
+=== Verify if Visual studio compiler is working
+
+You could check if the compiler `cl` is working by calling:
+
+ cl.exe hello.c
+
+Where the file `hello.c` contains:
+
+ #include <stdio.h>
+ int main() {
+    // printf() displays the string inside quotation
+    printf("Hello, World!");
+    return 0;
+ }
+
+The expected output should be as follow:
+
+....
+Compilateur d'optimisation Microsoft (R) C/C++ version 19.24.28314 pour x86
+Copyright (C) Microsoft Corporation. Tous droits réservés.
+
+hello.c
+Microsoft (R) Incremental Linker Version 14.24.28314.0
+Copyright (C) Microsoft Corporation.  All rights reserved.
+
+/out:hello.exe
+hello.obj
+....
+
+=== unresolved external symbol
+
+If you see link errors like these:
+
+ _librsyncmodule.obj : error LNK2001: unresolved external symbol rs_sig_begin
+ _librsyncmodule.obj : error LNK2001: unresolved external symbol rs_job_free
+ _librsyncmodule.obj : error LNK2001: unresolved external symbol rs_loadsig_begin
+
+then you have probably compiled librsync for the wrong architecture.
+Try both `-A Win32`/`-A x64` switches when running cmake to build librsync.
+
+If you see link errors like these:
+
+ cmodule.obj : error LNK2001: unresolved external symbol __imp__Py_BuildValue
+ cmodule.obj : error LNK2001: unresolved external symbol __imp__PyDict_SetItemString
+ cmodule.obj : error LNK2001: unresolved external symbol __imp__PyModule_GetDict
+
+then you are using the wrong bitness build tools.
+Try both "x64 Native Tools Command Prompt for VS 2019" as well as "Developer Command Prompt for VS2019".
+
+== Debugging (from the command line)
+
+I'm a Windows no-obs, and I use Windows through Vagrant, mostly from the command line (using `vagrant ssh`).
+Here are my notes on some tricks I learned, Windows is a weird beast for a Linux guy...
+
+=== Process handling
+
+Get a list of processes: `tasklist`
+
+Kill a process: `taskkill /IM firefox.exe /F`
+
+To get the return code of the last command (the equivalent of `$?` under Linux), call `echo %ERRORLEVEL%`.
+
+=== Files handling
+
+To get a list of opened files, and the process accessing them:
+
+[source,bat]
+----
+openfiles /local ON
+REM reboot
+openfiles /query /fo csv | find /I "<path>"
+----
+
+With `icacls` you can list the (Windows) ACLs of a file.
+
+With `attrib` you can set the read-only attribute of a file.
+
+=== Shells
+
+Different shells might be useful:
+
+* `cmd.exe` is the default one.
+* PowerShell can be started with `powershell`.
+* Git comes with the bash shell `"\Program Files\Git\bin\bash.exe"`
+
+=== Interesting links
+
+* https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands[Reference of Windows commands]

@@ -25,9 +25,17 @@ rdiff-backup.spec
 
 # Jekyll static sites
 _site/
+Gemfile.lock
+vendor/
+# generated files
+*.html
+*.pdf
 
 # test coverage files
 .coverage*
 
 # Profiling information
 mprofile_*.dat
+
+# Ignore Windows artefacts
+*.dll

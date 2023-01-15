@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
 
-import sys
+import filecmp
 import os
+import shutil
+import subprocess
+import sys
 import time
 
 # we need all this to extend the distutils/setuptools commands
 from setuptools import setup, Extension, Command
 import setuptools.command.build_py
+import setuptools.command.sdist
 from distutils.debug import DEBUG
 import distutils.command.clean
 from distutils import log
@@ -39,9 +43,25 @@ if os.name == "posix" or os.name == "nt":
         if LFLAGS or LIBS:
             lflags_arg = LFLAGS + LIBS
 
-        if LIBRSYNC_DIR:
+        if LIBRSYNC_DIR and len(sys.argv) > 1:
             incdir_list = [os.path.join(LIBRSYNC_DIR, "include")]
             libdir_list = [os.path.join(LIBRSYNC_DIR, "lib")]
+            if os.name == "nt":
+                rsyncdll_src = os.path.join(LIBRSYNC_DIR, "bin", "rsync.dll")
+                rsyncdll_dst = os.path.join("src", "rdiff_backup", "rsync.dll")
+                # rather ugly workaround, but it should be good enough
+                if "clean" in sys.argv:
+                    if os.path.exists(rsyncdll_dst) and "--all" in sys.argv:
+                        print(f"removing {rsyncdll_dst}")
+                        if "--dry-run" not in sys.argv:
+                            os.remove(rsyncdll_dst)
+                elif ("--version" not in sys.argv and "-V" not in sys.argv
+                      and "--help" not in sys.argv):
+                    if (not os.path.exists(rsyncdll_dst)
+                            or not filecmp.cmp(rsyncdll_src, rsyncdll_dst)):
+                        print(f"copying {rsyncdll_src} -> {rsyncdll_dst}")
+                        if "--dry-run" not in sys.argv:
+                            shutil.copyfile(rsyncdll_src, rsyncdll_dst)
         if "-lrsync" in LIBS:
             libname = []
 
@@ -50,9 +70,59 @@ if os.name == "nt":
     librsync_macros = [("rsync_EXPORTS", None)]
 
 
+# --- extend the build command to execute a command ---
+
+
+class pre_build_exec(Command):
+    description = 'build template files executing a shell command'
+    user_options = [
+        # The format is (long option, short option, description).
+        ('commands=', None, 'list of command strings'),
+    ]
+
+    def initialize_options(self):
+        """Set default values for options."""
+        # Each user option must be listed here with their default value.
+        self.commands = []
+
+    def finalize_options(self):
+        """Post-process options."""
+        # we would need to do more if we would want to support command line
+        # and/or setup.cfg as we would need to parse a string into a list of tuples
+        if self.commands:
+            assert all(map(lambda x: len(x) == 3, self.commands)), (
+                "Each element of the list '{}' must be a tuple of "
+                "command, source and target".format(
+                    self.commands))
+
+    def _make_exec(self, cmd, infile, outfile, repl_dict={}):
+        self.mkpath(os.path.dirname(outfile))
+        full_cmd = cmd.format(infile=infile, outfile=outfile, **repl_dict)
+        subprocess.call(full_cmd, shell=True)
+
+    def run(self):
+        if DEBUG:
+            self.debug_print(self.distribution.dump_option_dicts())
+        build_time = int(os.environ.get('SOURCE_DATE_EPOCH', time.time()))
+        replacement_dict = {
+            "ver": self.distribution.get_version(),
+            "date": time.strftime("%B %Y", time.gmtime(build_time))
+        }
+        for command in self.commands:
+            cmd = command[0]
+            inpath = os.path.join(*command[1])
+            outpath = os.path.join(*command[2])
+            self.make_file(
+                (inpath), outpath,
+                self._make_exec, (cmd, inpath, outpath, replacement_dict),
+                exec_msg="executing {}".format(command)
+            )
+
+
 # --- extend the build command to do templating of files ---
 
-class build_templates(Command):
+
+class pre_build_templates(Command):
     description = 'build template files replacing {{ }} placeholders'
     user_options = [
         # The format is (long option, short option, description).
@@ -71,10 +141,10 @@ class build_templates(Command):
         # and/or setup.cfg as we would need to parse a string into a list of tuples
         if self.template_files:
             assert all(map(lambda x: len(x) == 2, self.template_files)), (
-                'Each element of the list must be a tuple of source template and target files'
-                % self.template_files)
+                "Each element of the list '{}' must be a tuple of source "
+                "template and target files".format(self.template_files))
 
-    def make_template(self, infile, outfile, repl_dict={}):
+    def _make_template(self, infile, outfile, repl_dict={}):
         """A helper function replacing {{ place_holders }} defined in repl_dict,
         creating the outfile out of the source template file infile."""
         self.mkpath(os.path.dirname(outfile))
@@ -96,41 +166,62 @@ class build_templates(Command):
         for template in self.template_files:
             self.make_file(
                 (template[0]), template[1],
-                self.make_template, (template[0], template[1], replacement_dict),
+                self._make_template, (template[0], template[1],
+                                      replacement_dict),
                 exec_msg='templating %s -> %s' % (template[0], template[1])
             )
 
 
 class build_py(setuptools.command.build_py.build_py):
-    """Inject our build sub-command in the build step"""
+    """Inject our build sub-command in the build_py step"""
 
     def run(self):
-        self.run_command('build_templates')
+        self.run_command('pre_build_exec')
+        self.run_command('pre_build_templates')
         setuptools.command.build_py.build_py.run(self)
 
 
-# --- extend the clean command to remove templated files ---
+class sdist(setuptools.command.sdist.sdist):
+    """Inject our build sub-command in the sdist step"""
+
+    def run(self):
+        self.run_command('pre_build_exec')
+        self.run_command('pre_build_templates')
+        setuptools.command.sdist.sdist.run(self)
+
+
+# --- extend the clean command to remove templated and exec files ---
 
 class clean(distutils.command.clean.clean):
-    """Extend the clean class to also delete templated files"""
+    """Extend the clean class to also delete templated and exec files"""
 
     def initialize_options(self):
         self.template_files = None
+        self.commands = None
         super().initialize_options()
 
     def finalize_options(self):
         """Post-process options."""
-        # take over the option from our build_templates command
-        self.set_undefined_options('build_templates', ('template_files', 'template_files'))
+        # take over the option from our pre_build_templates command
+        self.set_undefined_options('pre_build_templates',
+                                   ('template_files', 'template_files'))
+        self.set_undefined_options('pre_build_exec',
+                                   ('commands', 'commands'))
         super().finalize_options()
 
     def run(self):
         if self.all:
-            for template in self.template_files:
-                if os.path.isfile(template[1]):
+            for outfile in self.template_files:
+                if os.path.isfile(outfile[-1]):
                     if not self.dry_run:
-                        os.remove(template[1])
-                    log.info("removing '%s'", template[1])
+                        os.remove(outfile[-1])
+                    log.info("removing '%s'", outfile[-1])
+            for outfile in self.commands:
+                outpath = os.path.join(*outfile[-1])
+                if os.path.isfile(outpath):
+                    if not self.dry_run:
+                        os.remove(outpath)
+                    log.info("removing '%s'", outpath)
         super().run()
 
 
@@ -175,10 +266,21 @@ setup(
     # maintainer and maintainer_email could be used to differentiate the package owner
     url="https://rdiff-backup.net/",
     download_url="https://github.com/rdiff-backup/rdiff-backup/releases",
-    python_requires='~=3.5',
+    python_requires='~=3.6',
     platforms=['linux', 'win32'],
-    packages=["rdiff_backup"],
+    entry_points={
+        'console_scripts': [
+            'rdiff-backup = rdiffbackup.run:main',
+            'rdiff-backup-delete = rdiff_backup.run_delete:main',
+            'rdiff-backup-statistics = rdiff_backup.run_stats:main',
+        ]
+    },
+    packages=["rdiff_backup", "rdiffbackup",
+              "rdiffbackup.actions", "rdiffbackup.utils", "rdiffbackup.meta",
+              "rdiffbackup.locations", "rdiffbackup.locations.map"],
     package_dir={"": "src"},  # tell distutils packages are under src
+    include_package_data=True,
+    package_data={"rdiff_backup": ["*.dll"]},
     ext_modules=[
         Extension("rdiff_backup.C", ["src/cmodule.c"]),
         Extension(
@@ -191,37 +293,67 @@ setup(
             extra_link_args=lflags_arg,
         ),
     ],
-    scripts=["src/rdiff-backup", "src/rdiff-backup-statistics", "src/rdiff-backup-delete"],
     data_files=[
-        ("share/man/man1", ["build/rdiff-backup.1", "build/rdiff-backup-statistics.1"]),
+        ("share/man/man1", ["dist/rdiff-backup.1",
+                            "dist/rdiff-backup-old.1",
+                            "dist/rdiff-backup-delete.1",
+                            "dist/rdiff-backup-statistics.1"]),
         (
-            "share/doc/rdiff-backup",
-            [
-                "CHANGELOG.md",
+            "share/doc/rdiff-backup", [
+                "CHANGELOG.adoc",
                 "COPYING",
-                "README.md",
-                "docs/FAQ.md",
-                "docs/examples.md",
-                "docs/DEVELOP.md",
-                "docs/Windows-README.md",
-                "docs/Windows-DEVELOP.md",
+                "README.adoc",
+                "docs/credits.adoc",
+                "docs/DEVELOP.adoc",
+                "docs/examples.adoc",
+                "docs/FAQ.adoc",
+                "docs/migration.adoc",
+                "docs/Windows-README.adoc",
+                "docs/Windows-DEVELOP.adoc",
             ],
         ),
-        ("share/bash-completion/completions", ["tools/bash-completion/rdiff-backup"]),
+        ("share/bash-completion/completions", ["tools/completions/bash/rdiff-backup"]),
     ],
     # options is a hash of hash with command -> option -> value
     # the value happens here to be a list of file couples/tuples
-    options={'build_templates': {'template_files': [
-        ("tools/rdiff-backup.spec.template", "build/rdiff-backup.spec"),
-        ("tools/rdiff-backup.spec.template-fedora", "build/rdiff-backup.fedora.spec"),
-        ("docs/rdiff-backup.1", "build/rdiff-backup.1"),
-        ("docs/rdiff-backup-statistics.1", "build/rdiff-backup-statistics.1"),
-    ]}},
+    options={
+        'pre_build_templates': {'template_files': [
+            ("tools/rdiff-backup.spec.template", "build/rdiff-backup.spec"),
+            ("tools/rdiff-backup.spec.template-fedora", "build/rdiff-backup.fedora.spec"),
+            ("docs/rdiff-backup-old.1.template", "dist/rdiff-backup-old.1"),
+        ]},
+        "pre_build_exec": {"commands": [
+            ("asciidoctor -b manpage -a revdate=\"{date}\" "
+             "-a revnumber=\"{ver}\" -o {outfile} {infile}",
+             ("docs", "rdiff-backup.1.adoc"), ("dist", "rdiff-backup.1")),
+            ("asciidoctor -b manpage -a revdate=\"{date}\" "
+             "-a revnumber=\"{ver}\" -o {outfile} {infile}",
+             ("docs", "rdiff-backup-statistics.1.adoc"),
+             ("dist", "rdiff-backup-statistics.1")),
+            ("asciidoctor -b manpage -a revdate=\"{date}\" "
+             "-a revnumber=\"{ver}\" -o {outfile} {infile}",
+             ("docs", "rdiff-backup-delete.1.adoc"),
+             ("dist", "rdiff-backup-delete.1")),
+        ]},
+    },
     cmdclass={
-        'build_templates': build_templates,
+        'pre_build_exec': pre_build_exec,
+        'pre_build_templates': pre_build_templates,
         'build_py': build_py,
+        'sdist': sdist,
         'clean': clean,
     },
-    install_requires=['setuptools'],
+    install_requires=[
+        'importlib-metadata ; python_version < "3.8"',
+        'pywin32 ; platform_system == "Windows"',
+        'PyYAML',
+    ],
+    extras_require={
+        'meta': [
+            'pylibacl ; os_name == "posix"',
+            'pyxattr ; platform_system == "Linux"',
+            'psutil',
+        ]
+    },
     setup_requires=['setuptools_scm'],
 )

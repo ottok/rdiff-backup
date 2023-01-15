@@ -23,7 +23,17 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 #include <librsync.h>
-#define RS_JOB_BLOCKSIZE 65536
+#define RSM_JOB_BLOCKSIZE 65536
+
+/* ----------------------------------------------------------------------- *
+ * Update for Python 3.11 - Contributed by Victor Stinner in bpo-39573.
+ * Compatibility macro for older Python versions.
+ * ----------------------------------------------------------------------- */
+#if PY_VERSION_HEX < 0x030900A4 && !defined(Py_SET_TYPE)
+static inline void _Py_SET_TYPE(PyObject *ob, PyTypeObject *type)
+{ ob->ob_type = type; }
+#define Py_SET_TYPE(ob, type) _Py_SET_TYPE((PyObject*)(ob), type)
+#endif
 
 static PyObject *librsyncError;
 
@@ -84,7 +94,7 @@ _librsync_sigmaker_dealloc(PyObject* self)
 static PyObject *
 _librsync_sigmaker_cycle(_librsync_SigMakerObject *self, PyObject *args)
 {
-  char *inbuf, outbuf[RS_JOB_BLOCKSIZE];
+  char *inbuf, outbuf[RSM_JOB_BLOCKSIZE];
   Py_ssize_t inbuf_length;
   rs_buffers_t buf;
   rs_result result;
@@ -95,7 +105,7 @@ _librsync_sigmaker_cycle(_librsync_SigMakerObject *self, PyObject *args)
   buf.next_in = inbuf;
   buf.avail_in = (size_t)inbuf_length;
   buf.next_out = outbuf;
-  buf.avail_out = (size_t)RS_JOB_BLOCKSIZE;
+  buf.avail_out = (size_t)RSM_JOB_BLOCKSIZE;
   buf.eof_in = (inbuf_length == 0);
 
   result = rs_job_iter(self->sig_job, &buf);
@@ -105,9 +115,9 @@ _librsync_sigmaker_cycle(_librsync_SigMakerObject *self, PyObject *args)
 	return NULL;
   }
 
-  return Py_BuildValue("(ily#)", (result == RS_DONE),
-					   (long)inbuf_length - (long)buf.avail_in,
-					   outbuf, RS_JOB_BLOCKSIZE - (long)buf.avail_out);
+  return Py_BuildValue("(iny#)", (result == RS_DONE),
+		  (Py_ssize_t)inbuf_length - (Py_ssize_t)buf.avail_in,
+		  outbuf, (Py_ssize_t)RSM_JOB_BLOCKSIZE - (Py_ssize_t)buf.avail_out);
 }
 
 static PyMethodDef _librsync_sigmaker_methods[] = {
@@ -200,7 +210,7 @@ static PyObject*
 _librsync_new_deltamaker(PyObject* self, PyObject* args)
 {
   _librsync_DeltaMakerObject* dm;
-  char *sig_string, outbuf[RS_JOB_BLOCKSIZE];
+  char *sig_string, outbuf[RSM_JOB_BLOCKSIZE];
   Py_ssize_t sig_length;
   rs_job_t *sig_loader;
   rs_signature_t *sig_ptr;
@@ -216,7 +226,7 @@ _librsync_new_deltamaker(PyObject* self, PyObject* args)
   buf.next_in = sig_string;
   buf.avail_in = (size_t)sig_length;
   buf.next_out = outbuf;
-  buf.avail_out = (size_t)RS_JOB_BLOCKSIZE;
+  buf.avail_out = (size_t)RSM_JOB_BLOCKSIZE;
   buf.eof_in = 1;
   result = rs_job_iter(sig_loader, &buf);
   rs_job_free(sig_loader);
@@ -253,7 +263,7 @@ _librsync_deltamaker_dealloc(PyObject* self)
 static PyObject *
 _librsync_deltamaker_cycle(_librsync_DeltaMakerObject *self, PyObject *args)
 {
-  char *inbuf, outbuf[RS_JOB_BLOCKSIZE];
+  char *inbuf, outbuf[RSM_JOB_BLOCKSIZE];
   Py_ssize_t inbuf_length;
   rs_buffers_t buf;
   rs_result result;
@@ -264,7 +274,7 @@ _librsync_deltamaker_cycle(_librsync_DeltaMakerObject *self, PyObject *args)
   buf.next_in = inbuf;
   buf.avail_in = (size_t)inbuf_length;
   buf.next_out = outbuf;
-  buf.avail_out = (size_t)RS_JOB_BLOCKSIZE;
+  buf.avail_out = (size_t)RSM_JOB_BLOCKSIZE;
   buf.eof_in = (inbuf_length == 0);
 
   result = rs_job_iter(self->delta_job, &buf);
@@ -273,9 +283,9 @@ _librsync_deltamaker_cycle(_librsync_DeltaMakerObject *self, PyObject *args)
 	return NULL;
   }
 
-  return Py_BuildValue("(ily#)", (result == RS_DONE),
-					   (long)inbuf_length - (long)buf.avail_in,
-					   outbuf, RS_JOB_BLOCKSIZE - (long)buf.avail_out);
+  return Py_BuildValue("(iny#)", (result == RS_DONE),
+		  (Py_ssize_t)inbuf_length - (Py_ssize_t)buf.avail_in,
+		  outbuf, (Py_ssize_t)RSM_JOB_BLOCKSIZE - (Py_ssize_t)buf.avail_out);
 }
 
 static PyMethodDef _librsync_deltamaker_methods[] = {
@@ -425,7 +435,7 @@ _librsync_patchmaker_dealloc(PyObject* self)
 static PyObject *
 _librsync_patchmaker_cycle(_librsync_PatchMakerObject *self, PyObject *args)
 {
-  char *inbuf, outbuf[RS_JOB_BLOCKSIZE];
+  char *inbuf, outbuf[RSM_JOB_BLOCKSIZE];
   Py_ssize_t inbuf_length;
   rs_buffers_t buf;
   rs_result result;
@@ -436,7 +446,7 @@ _librsync_patchmaker_cycle(_librsync_PatchMakerObject *self, PyObject *args)
   buf.next_in = inbuf;
   buf.avail_in = (size_t)inbuf_length;
   buf.next_out = outbuf;
-  buf.avail_out = (size_t)RS_JOB_BLOCKSIZE;
+  buf.avail_out = (size_t)RSM_JOB_BLOCKSIZE;
   buf.eof_in = (inbuf_length == 0);
 
   result = rs_job_iter(self->patch_job, &buf);
@@ -445,9 +455,9 @@ _librsync_patchmaker_cycle(_librsync_PatchMakerObject *self, PyObject *args)
 	return NULL;
   }
 
-  return Py_BuildValue("(ily#)", (result == RS_DONE),
-					   (long)inbuf_length - (long)buf.avail_in,
-					   outbuf, RS_JOB_BLOCKSIZE - (long)buf.avail_out);
+  return Py_BuildValue("(iny#)", (result == RS_DONE),
+		  (Py_ssize_t)inbuf_length - (Py_ssize_t)buf.avail_in,
+		  outbuf, (Py_ssize_t)RSM_JOB_BLOCKSIZE - (Py_ssize_t)buf.avail_out);
 }
 
 static PyMethodDef _librsync_patchmaker_methods[] = {
@@ -540,8 +550,9 @@ PyMODINIT_FUNC PyInit__librsync(void)
 {
   PyObject *m, *d;
 
-  Py_TYPE(&_librsync_SigMakerType) = &PyType_Type;
-  Py_TYPE(&_librsync_DeltaMakerType) = &PyType_Type;
+  /* Update for Python 3.11 - bpo-39573. */
+  Py_SET_TYPE(&_librsync_SigMakerType, &PyType_Type);
+  Py_SET_TYPE(&_librsync_DeltaMakerType, &PyType_Type);
   static struct PyModuleDef librsync_def = {
             PyModuleDef_HEAD_INIT, "_librsync", "RSync Lib", -1, _librsyncMethods, };
   m = PyModule_Create(&librsync_def);
@@ -551,10 +562,10 @@ PyMODINIT_FUNC PyInit__librsync(void)
   d = PyModule_GetDict(m);
   librsyncError = PyErr_NewException("_librsync.librsyncError", NULL, NULL);
   PyDict_SetItemString(d, "librsyncError", librsyncError);
-  PyDict_SetItemString(d, "RS_JOB_BLOCKSIZE",
-					   Py_BuildValue("l", (long)RS_JOB_BLOCKSIZE));
+  PyDict_SetItemString(d, "RSM_JOB_BLOCKSIZE",
+		  Py_BuildValue("n", (Py_ssize_t)RSM_JOB_BLOCKSIZE));
   PyDict_SetItemString(d, "RS_DEFAULT_BLOCK_LEN",
-					   Py_BuildValue("l", (long)RS_DEFAULT_BLOCK_LEN));
+		  Py_BuildValue("n", (Py_ssize_t)RS_DEFAULT_BLOCK_LEN));
 
   return m;
 }

@@ -18,16 +18,13 @@
 # 02110-1301, USA
 """Provide time related exceptions and functions"""
 
-import time
-import re
 import calendar
-from . import Globals
+import re
+import time
+from rdiff_backup import Globals
 
 
-class TimeException(Exception):
-    pass
-
-
+curtime = curtimestr = None  # compat200
 _interval_conv_dict = {
     "s": 1,
     "m": 60,
@@ -45,46 +42,90 @@ _genstr_date_regexp1 = re.compile(
     "(?P<month>[0-9]{1,2})[-/](?P<day>[0-9]{1,2})$")
 _genstr_date_regexp2 = re.compile("^(?P<month>[0-9]{1,2})[-/]"
                                   "(?P<day>[0-9]{1,2})[-/](?P<year>[0-9]{4})$")
-curtime = curtimestr = None
+
+# constants defining the format string for time dates (without timezone)
+TIMEDATE_FORMAT_STRING = "%Y-%m-%dT%H:%M:%S"
+TIMEDATE_FORMAT_COMPAT = TIMEDATE_FORMAT_STRING.replace(":", "-")
+TIMEDATE_FORMAT_LENGTH = 19  # 19 chars with 4 digits year
+# separators in a string looking like the above
+TIMEDATE_FORMAT_REGEXP = re.compile('[T:-]')
 
 
-def setcurtime(curtime=None):
-    """Sets the current time in curtime and curtimestr on all systems"""
-    t = curtime or time.time()
-    for conn in Globals.connections:
-        conn.Time.setcurtime_local(int(t))
+class TimeException(Exception):
+    pass
 
 
+def set_current_time(reftime=None):
+    """
+    Sets the current time in curtime and curtimestr on all systems
+    """
+    if reftime is None:
+        reftime = time.time()
+    if Globals.get_api_version() < 201:  # compat200
+        for conn in Globals.connections:
+            conn.Time.setcurtime_local(int(reftime))
+    else:
+        Globals.set_all("current_time", reftime)
+        Globals.set_all("current_time_string", timetostring(reftime))
+
+
+# @API(setcurtime_local, 200, 200)
 def setcurtime_local(timeinseconds):
-    """Only set the current time locally"""
+    """
+    Only set the current time locally
+    """
     global curtime, curtimestr
     curtime, curtimestr = timeinseconds, timetostring(timeinseconds)
 
 
-def setprevtime(timeinseconds):
-    """Sets the previous inc time in prevtime and prevtimestr"""
-    assert 0 < timeinseconds < curtime, \
-        "Time %s is out of bounds" % (timeinseconds,)
+# compat200 - replace through direct reference to Globals.current_time
+def getcurtime():
+    if Globals.get_api_version() < 201:
+        return curtime
+    else:
+        return Globals.current_time
+
+
+# compat200 - replace through direct reference to Globals.current_time_string
+def getcurtimestr():
+    if Globals.get_api_version() < 201:
+        return curtimestr
+    else:
+        return Globals.current_time_string
+
+
+def setprevtime_compat200(timeinseconds):
+    """
+    Sets the previous inc time in prevtime and prevtimestr on all connections
+    """
+    assert 0 < timeinseconds < getcurtime(), (
+        "Time {secs} is either negative or in the future".format(
+            secs=timeinseconds))
     timestr = timetostring(timeinseconds)
     for conn in Globals.connections:
         conn.Time.setprevtime_local(timeinseconds, timestr)
 
 
+# @API(setprevtime_local, 200, 200)
 def setprevtime_local(timeinseconds, timestr):
-    """Like setprevtime but only set the local version"""
+    """
+    Like setprevtime but only set the local version
+    """
     global prevtime, prevtimestr
     prevtime, prevtimestr = timeinseconds, timestr
 
 
 def timetostring(timeinseconds):
-    """Return w3 datetime compliant listing of timeinseconds, or one in
-    which :'s have been replaced with -'s"""
+    """
+    Return w3 datetime compliant listing of timeinseconds, or one in
+    which :'s have been replaced with -'s
+    """
     if not Globals.use_compatible_timestamps:
-        format_string = "%Y-%m-%dT%H:%M:%S"
+        format_string = TIMEDATE_FORMAT_STRING
     else:
-        format_string = "%Y-%m-%dT%H-%M-%S"
+        format_string = TIMEDATE_FORMAT_COMPAT
     s = time.strftime(format_string, time.localtime(timeinseconds))
-    return s + gettzd(timeinseconds)
+    return s + _get_tzd(timeinseconds)
 
 
 def timetobytes(timeinseconds):
@@ -92,30 +133,33 @@ def timetobytes(timeinseconds):
 
 
 def stringtotime(timestring):
-    """Return time in seconds from w3 timestring
+    """
+    Return time in seconds from w3 timestring
 
     If there is an error parsing the string, or it doesn't look
     like a w3 datetime string, return None.
-
     """
-
-    regexp = re.compile('[-:]')
-
     try:
-        date, daytime = timestring[:19].split("T")
-        year, month, day = list(map(int, date.split("-")))
-        hour, minute, second = list(map(int, regexp.split(daytime)))
-        assert 1900 < year < 2100, year
-        assert 1 <= month <= 12
-        assert 1 <= day <= 31
-        assert 0 <= hour <= 23
-        assert 0 <= minute <= 59
-        assert 0 <= second <= 61  # leap seconds
+        year, month, day, hour, minute, second = list(
+            map(int, TIMEDATE_FORMAT_REGEXP.split(
+                timestring[:TIMEDATE_FORMAT_LENGTH])))
         timetuple = (year, month, day, hour, minute, second, -1, -1, 0)
+        if not (1900 < year < 2100
+                and 1 <= month <= 12
+                and 1 <= day <= 31
+                and 0 <= hour <= 23
+                and 0 <= minute <= 59
+                and 0 <= second <= 61):  # leap seconds
+            # "Time string {tstr} couldn't be parsed correctly to "
+            # "year/month/day/hour/minute/second/... {ttup}.".format(
+            #    tstr=timestring, ttup=timetuple), 2)
+            return None
+
         utc_in_secs = calendar.timegm(timetuple)
 
-        return int(utc_in_secs) + tzdtoseconds(timestring[19:])
-    except (TypeError, ValueError, AssertionError):
+        return int(utc_in_secs) + _tzd_to_seconds(
+            timestring[TIMEDATE_FORMAT_LENGTH:])
+    except (TypeError, ValueError):
         return None
 
 
@@ -127,17 +171,16 @@ def bytestotime(timebytes):
 
 
 def timetopretty(timeinseconds):
-    """Return pretty version of time"""
+    """
+    Return pretty version of time
+    """
     return time.asctime(time.localtime(timeinseconds))
 
 
-def stringtopretty(timestring):
-    """Return pretty version of time given w3 time string"""
-    return timetopretty(stringtotime(timestring))
-
-
 def prettytotime(prettystring):
-    """Converts time like "Mon Jun 5 11:00:23" to epoch sec, or None"""
+    """
+    Converts time like "Mon Jun 5 11:00:23" to epoch sec, or None
+    """
     try:
         return time.mktime(time.strptime(prettystring))
     except ValueError:
@@ -145,7 +188,9 @@ def prettytotime(prettystring):
 
 
 def inttopretty(seconds):
-    """Convert num of seconds to readable string like "2 hours"."""
+    """
+    Convert num of seconds to readable string like "2 hours".
+    """
     partlist = []
     hours, seconds = divmod(seconds, 3600)
     if hours > 1:
@@ -169,8 +214,70 @@ def inttopretty(seconds):
     return " ".join(partlist)
 
 
-def intstringtoseconds(interval_string):
-    """Convert a string expressing an interval (e.g. "4D2s") to seconds"""
+def genstrtotime(timestr, ref_time=None, rp=None, session_times=None):
+    """
+    Convert a generic time string to a time in seconds
+
+    rp is used when the time is of the form "4B" or similar.  Then the
+    times of the increments of that particular file are used.
+    """
+    if ref_time is None:
+        ref_time = getcurtime()
+    if timestr == "now":
+        return ref_time
+
+    def error():
+        raise TimeException("""Bad time string "%s"
+
+The acceptable time strings are intervals (like "3D64s"), w3-datetime
+strings, like "2002-04-26T04:22:01-07:00" (strings like
+"2002-04-26T04:22:01" are also acceptable - rdiff-backup will use the
+current time zone), or ordinary dates like 2/4/1997 or 2001-04-23
+(various combinations are acceptable, but the month always precedes
+the day).""" % timestr)
+
+    # Test for straight integer
+    if _integer_regexp.search(timestr):
+        return int(timestr)
+
+    # Test for w3-datetime format, possibly missing tzd
+    t = stringtotime(timestr) or stringtotime(timestr + _get_tzd())
+    if t:
+        return t
+
+    # Test for time given as number of backups, like 3B
+    if _session_regexp.search(timestr):
+        return _time_from_session(int(timestr[:-1]), rp, session_times)
+
+    # Try for long time, like "Mon Jun 5 11:00:23 1990"
+    t = prettytotime(timestr)
+    if t is not None:
+        return t
+
+    try:  # test for an interval, like "2 days ago"
+        return ref_time - _intervalstr_to_seconds(timestr)
+    except TimeException:
+        pass
+
+    # Now check for dates like 2001/3/23
+    match = _genstr_date_regexp1.search(timestr) or \
+        _genstr_date_regexp2.search(timestr)
+    if not match:
+        error()
+    timestr = "%s-%02d-%02dT00:00:00%s" % (match.group('year'),
+                                           int(match.group('month')),
+                                           int(match.group('day')), _get_tzd())
+    t = stringtotime(timestr)
+    if t is not None:
+        return t
+    else:
+        error()
+
+
+def _intervalstr_to_seconds(interval_string):
+    """
+    Convert a string expressing an interval (e.g. "4D2s") to seconds
+    """
 
     def error():
         raise TimeException("""Bad interval string "%s"
@@ -196,14 +303,14 @@ page for more information.
     return total
 
 
-def gettzd(timeinseconds=None):
-    """Return w3's timezone identification string.
+def _get_tzd(timeinseconds=None):
+    """
+    Return w3's timezone identification string.
 
     Expressed as [+/-]hh:mm.  For instance, PDT is -07:00 during
     dayling savings and -08:00 otherwise.  Zone coincides with what
     localtime(), etc., use.  If no argument given, use the current
     time.
-
     """
     if timeinseconds is None:
         timeinseconds = time.time()
@@ -224,108 +331,42 @@ def gettzd(timeinseconds=None):
     else:
         time_separator = ':'
     hours, minutes = list(map(abs, divmod(offset, 60)))
-    assert 0 <= hours <= 23
-    assert 0 <= minutes <= 59
+    assert 0 <= hours <= 23, (
+        "Hours {hrs} must be between 0 and 23".format(hrs=hours))
+    assert 0 <= minutes <= 59, (
+        "Minutes {mins} must be between 0 and 59".format(mins=minutes))
     return "%s%02d%s%02d" % (prefix, hours, time_separator, minutes)
 
 
-def tzdtoseconds(tzd):
-    """Given w3 compliant TZD, return how far ahead UTC is"""
+def _tzd_to_seconds(tzd):
+    """
+    Given w3c compliant TZD, return how far ahead UTC is, else raise
+    ValueError exception.
+    """
     if tzd == "Z":
         return 0
-    assert len(tzd) == 6  # only accept forms like +08:00 for now
-    assert (tzd[0] == "-" or tzd[0] == "+") and (tzd[3] == ":"
-                                                 or tzd[3] == "-")
+    if not (len(tzd) == 6
+            and (tzd[0] == "-" or tzd[0] == "+")
+            and (tzd[3] == ":" or tzd[3] == "-")):
+        raise ValueError(
+            "Only timezones like +08:00 are accepted and not '{tzd}'.".format(
+                tzd=tzd))
     return -60 * (60 * int(tzd[:3]) + int(tzd[4:]))
 
 
-def cmp(time1, time2):
-    """Compare time1 and time2 and return -1, 0, or 1"""
-    if type(time1) is str:
-        time1 = stringtotime(time1)
-        assert time1 is not None
-    if type(time2) is str:
-        time2 = stringtotime(time2)
-        assert time2 is not None
-
-    if time1 < time2:
-        return -1
-    elif time1 == time2:
-        return 0
-    else:
-        return 1
-
-
-def time_from_session(session_num, rp=None):
-    """Return time in seconds of given backup
+def _time_from_session(session_num, rp=None, session_times=None):
+    """
+    Return time in seconds of given backup
 
     The current mirror is session_num 0, the next oldest increment has
-    number 1, etc.  Requires that the Globals.rbdir directory be set.
+    number 1, etc.  Requires that the Globals.rbdir directory be set by default.
 
+    session_times is assumed to be a pre-sorted list of times as epochs.
     """
-    session_times = Globals.rbdir.conn.restore.MirrorStruct \
-        .get_increment_times()
-    session_times.sort()
+    if session_times is None:  # compat200
+        if rp is None:
+            rp = Globals.rbdir
+        session_times = rp.conn.restore.MirrorStruct.get_increment_times()
     if len(session_times) <= session_num:
         return session_times[0]  # Use oldest if too few backups
     return session_times[-session_num - 1]
-
-
-def genstrtotime(timestr, curtime=None, rp=None):
-    """Convert a generic time string to a time in seconds
-
-    rp is used when the time is of the form "4B" or similar.  Then the
-    times of the increments of that particular file are used.
-
-    """
-    if curtime is None:
-        curtime = globals()['curtime']
-    if timestr == "now":
-        return curtime
-
-    def error():
-        raise TimeException("""Bad time string "%s"
-
-The acceptable time strings are intervals (like "3D64s"), w3-datetime
-strings, like "2002-04-26T04:22:01-07:00" (strings like
-"2002-04-26T04:22:01" are also acceptable - rdiff-backup will use the
-current time zone), or ordinary dates like 2/4/1997 or 2001-04-23
-(various combinations are acceptable, but the month always precedes
-the day).""" % timestr)
-
-    # Test for straight integer
-    if _integer_regexp.search(timestr):
-        return int(timestr)
-
-    # Test for w3-datetime format, possibly missing tzd
-    t = stringtotime(timestr) or stringtotime(timestr + gettzd())
-    if t:
-        return t
-
-    # Test for time given as number of backups, like 3B
-    if _session_regexp.search(timestr):
-        return time_from_session(int(timestr[:-1]), rp)
-
-    # Try for long time, like "Mon Jun 5 11:00:23 1990"
-    t = prettytotime(timestr)
-    if t is not None:
-        return t
-
-    try:  # test for an interval, like "2 days ago"
-        return curtime - intstringtoseconds(timestr)
-    except TimeException:
-        pass
-
-    # Now check for dates like 2001/3/23
-    match = _genstr_date_regexp1.search(timestr) or \
-        _genstr_date_regexp2.search(timestr)
-    if not match:
-        error()
-    timestr = "%s-%02d-%02dT00:00:00%s" % (match.group('year'),
-                                           int(match.group('month')),
-                                           int(match.group('day')), gettzd())
-    t = stringtotime(timestr)
-    if t is not None:
-        return t
-    else:
-        error()
