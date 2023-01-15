@@ -2,10 +2,11 @@ import unittest
 import os
 import io
 import time
-from commontest import old_test_dir, abs_output_dir, iter_equal
+from commontest import old_test_dir, abs_output_dir, iter_equal, xcopytree
 from rdiff_backup import rpath, Globals, selection
-from rdiff_backup.metadata import MetadataFile, PatchDiffMan, \
-    quote_path, unquote_path, RORP2Record, Record2RORP, RorpExtractor
+from rdiffbackup import meta_mgr
+from rdiffbackup.meta import stdattr
+from rdiffbackup.utils import quoting
 
 tempdir = rpath.RPath(Globals.local_connection, abs_output_dir)
 
@@ -25,10 +26,10 @@ class MetadataTest(unittest.TestCase):
             b" "
         ]
         for filename in filenames:
-            quoted = quote_path(filename)
-            assert b"\n" not in quoted, quoted
-            result = unquote_path(quoted)
-            assert result == filename, (quoted, result, filename)
+            quoted = quoting.quote_path(filename)
+            self.assertNotIn(b"\n", quoted)
+            result = quoting.unquote_path(quoted)
+            self.assertEqual(result, filename)
 
     def get_rpaths(self):
         """Return list of rorps"""
@@ -44,16 +45,16 @@ class MetadataTest(unittest.TestCase):
     def testRORP2Record(self):
         """Test turning RORPs into records and back again"""
         for rp in self.get_rpaths():
-            record = RORP2Record(rp)
-            new_rorp = Record2RORP(record)
-            assert new_rorp == rp, (new_rorp, rp, record)
+            record = stdattr.AttrFile._object_to_record(rp)
+            new_rorp = stdattr.AttrExtractor._record_to_object(record)
+            self.assertEqual(new_rorp, rp)
 
     def testIterator(self):
         """Test writing RORPs to file and iterating them back"""
 
         def write_rorp_iter_to_file(rorp_iter, file):
             for rorp in rorp_iter:
-                file.write(RORP2Record(rorp))
+                file.write(stdattr.AttrFile._object_to_record(rorp))
 
         rplist = self.get_rpaths()
         fp = io.BytesIO()
@@ -61,78 +62,103 @@ class MetadataTest(unittest.TestCase):
         fp.seek(0)
         fp.read()
         fp.seek(0)
-        outlist = list(RorpExtractor(fp).iterate())
-        assert len(rplist) == len(outlist), (len(rplist), len(outlist))
+        outlist = list(stdattr.AttrExtractor(fp).iterate())
+        self.assertEqual(len(rplist), len(outlist))
         for i in range(len(rplist)):
-            if not rplist[i].equal_verbose(outlist[i]):
-                assert 0, (i, str(rplist[i]), str(outlist[i]))
+            self.assertTrue(rplist[i]._equal_verbose(outlist[i]))
         fp.close()
 
-    def write_metadata_to_temp(self):
+    def write_metadata_to_temp(self, compress):
         """If necessary, write metadata of bigdir to file metadata.gz"""
         global tempdir
-        temprp = tempdir.append(
-            "mirror_metadata.2005-11-03T14:51:06-06:00.snapshot.gz")
+        meta_file_name = "mirror_metadata.2005-11-03T14:51:06-06:00.snapshot"
+        if compress:
+            meta_file_name += ".gz"
+        temprp = tempdir.append(meta_file_name)
         if temprp.lstat():
             return temprp
 
         self.make_temp()
         rootrp = rpath.RPath(Globals.local_connection,
                              os.path.join(old_test_dir, b"bigdir"))
-        rpath_iter = selection.Select(rootrp).set_iter()
+        rpath_iter = selection.Select(rootrp).get_select_iter()
 
         start_time = time.time()
-        mf = MetadataFile(temprp, 'w')
+        mf = stdattr.AttrFile(temprp, 'w', compress=compress)
         for rp in rpath_iter:
             mf.write_object(rp)
         mf.close()
         print("Writing metadata took %s seconds" % (time.time() - start_time))
         return temprp
 
-    def testSpeed(self):
-        """Test testIterator on 10000 files"""
-        temprp = self.write_metadata_to_temp()
-        mf = MetadataFile(temprp, 'r')
+    def helper_speed(self, compress):
+        temprp = self.write_metadata_to_temp(compress=compress)
+        mf = stdattr.AttrFile(temprp, 'r')
 
         start_time = time.time()
         i = 0
         for rorp in mf.get_objects():
             i += 1
-        print("Reading %s metadata entries took %s seconds." %
-              (i, time.time() - start_time))
+        print("Reading %s metadata entries took %s seconds (compressed=%s)." %
+              (i, time.time() - start_time, compress))
 
         start_time = time.time()
         blocksize = 32 * 1024
-        with temprp.open("rb", compress=1) as tempfp:
+        with temprp.open("rb", compress=compress) as tempfp:
             while 1:
                 buf = tempfp.read(blocksize)
                 if not buf:
                     break
-        print("Simply decompressing metadata file took %s seconds" %
-              (time.time() - start_time))
+        print("Simply decompressing metadata file took %s seconds "
+              "(compressed=%s)" % (time.time() - start_time, compress))
 
-    def testIterate_restricted(self):
-        """Test getting rorps restricted to certain index
+    def test_speed_compressed(self):
+        """
+        Test testIterator on 10000 files with compressed metadata
+        """
+        return self.helper_speed(compress=True)
+
+    def test_speed_uncompressed(self):
+        """
+        Test testIterator on 10000 files with uncompressed metadata
+        """
+        return self.helper_speed(compress=False)
+
+    def helper_iterate_restricted(self, compress):
+        """
+        Test getting rorps restricted to certain index
 
         In this case, get assume subdir (subdir3, subdir10) has 50
         files in it.
-
         """
-        temprp = self.write_metadata_to_temp()
-        mf = MetadataFile(temprp, 'rb')
+        temprp = self.write_metadata_to_temp(compress=compress)
+        mf = stdattr.AttrFile(temprp, 'rb')
         start_time = time.time()
         i = 0
         for rorp in mf.get_objects((b"subdir3", b"subdir10")):
             i += 1
-        print("Reading %s metadata entries took %s seconds." %
-              (i, time.time() - start_time))
-        assert i == 51
+        print("Reading %s metadata entries took %s seconds (compressed=%s)." %
+              (i, time.time() - start_time, compress))
+        self.assertEqual(i, 51)
 
-    def test_write(self):
-        """Test writing to metadata file, then reading back contents"""
+    def test_iterate_restricted_compressed(self):
+        """
+        Test getting rorps restricted to certain index from compressed file
+        """
+        return self.helper_iterate_restricted(compress=True)
+
+    def test_iterate_restricted_uncompressed(self):
+        """
+        Test getting rorps restricted to certain index from uncompressed file
+        """
+        return self.helper_iterate_restricted(compress=False)
+
+    def helper_write(self, compress):
         global tempdir
-        temprp = tempdir.append(
-            "mirror_metadata.2005-11-03T12:51:06-06:00.snapshot.gz")
+        meta_file_name = "mirror_metadata.2005-11-03T12:51:06-06:00.snapshot"
+        if compress:
+            meta_file_name += ".gz"
+        temprp = tempdir.append(meta_file_name)
         if temprp.lstat():
             temprp.delete()
 
@@ -141,28 +167,38 @@ class MetadataTest(unittest.TestCase):
                              os.path.join(old_test_dir, b"various_file_types"))
         # the following 3 lines make sure that we ignore incorrect files
         sel = selection.Select(rootrp)
-        sel.ParseArgs((), ())
-        rps = list(sel.set_iter())
+        sel.parse_selection_args((), ())
+        rps = list(sel.get_select_iter())
 
-        assert not temprp.lstat()
-        write_mf = MetadataFile(temprp, 'w')
+        self.assertFalse(temprp.lstat())
+        write_mf = stdattr.AttrFile(temprp, 'w', compress=compress)
         for rp in rps:
             write_mf.write_object(rp)
         write_mf.close()
-        assert temprp.lstat()
+        self.assertTrue(temprp.lstat())
 
-        reread_rps = list(MetadataFile(temprp, 'r').get_objects())
-        assert len(reread_rps) == len(rps), (len(reread_rps), len(rps))
+        reread_rps = list(stdattr.AttrFile(temprp, 'r').get_objects())
+        self.assertEqual(len(reread_rps), len(rps))
         for i in range(len(reread_rps)):
-            assert reread_rps[i] == rps[i], i
+            self.assertEqual(reread_rps[i], rps[i])
+
+    def test_write_compressed(self):
+        """
+        Test writing to compressed metadata file, then reading back
+        """
+        return self.helper_write(compress=True)
+
+    def test_write_uncompressed(self):
+        """
+        Test writing to uncompressed metadata file, then reading back
+        """
+        return self.helper_write(compress=False)
 
     def test_patch(self):
         """Test combining 3 iters of metadata rorps"""
         self.make_temp()
-        # shutil.copytree fails on the fifo file in the directory
-        os.system(
-            b'cp -a %s/* %s' %
-            (os.path.join(old_test_dir, b"various_file_types"), tempdir.path))
+        xcopytree(os.path.join(old_test_dir, b"various_file_types"),
+                  tempdir.path, content=True)
 
         rp1 = tempdir.append('regular_file')
         rp2 = tempdir.append('subdir')
@@ -178,15 +214,15 @@ class MetadataTest(unittest.TestCase):
         diff2 = [rp1new, rp2, zero]
 
         Globals.rbdir = tempdir
-        output = PatchDiffMan().iterate_patched_meta(
+        output = meta_mgr.PatchDiffMan()._iterate_patched_attr(
             [iter(current), iter(diff1),
              iter(diff2)])
         out1 = next(output)
-        assert out1 is rp1new, out1
+        self.assertIs(out1, rp1new)
         out2 = next(output)
-        assert out2 is rp2, out2
+        self.assertIs(out2, rp2)
         out3 = next(output)
-        assert out3 is rp3, out3
+        self.assertIs(out3, rp3)
         self.assertRaises(StopIteration, output.__next__)
 
     def test_meta_patch_cycle(self):
@@ -194,21 +230,23 @@ class MetadataTest(unittest.TestCase):
 
         def write_dir_to_meta(manager, rp, time):
             """Record the metadata under rp to a mirror_metadata file"""
-            metawriter = man.get_meta_writer(b'snapshot', time)
+            metawriter = man._writer_helper(b'snapshot', time,
+                                            stdattr.get_plugin_class())
             sel = selection.Select(rp)
-            sel.ParseArgs((), ())  # make sure incorrect files are filtered out
-            for rorp in sel.set_iter():
+            sel.parse_selection_args((), ())  # make sure incorrect files are filtered out
+            for rorp in sel.get_select_iter():
                 metawriter.write_object(rorp)
             metawriter.close()
 
         def compare(man, rootrp, time):
             sel = selection.Select(rootrp)
-            sel.ParseArgs((), ())  # make sure incorrect files are filtered out
-            assert iter_equal(sel.set_iter(), man.get_meta_at_time(time, None))
+            sel.parse_selection_args((), ())  # make sure incorrect files are filtered out
+            self.assertTrue(iter_equal(
+                sel.get_select_iter(), man._get_meta_main_at_time(time, None)))
 
         self.make_temp()
         Globals.rbdir = tempdir
-        man = PatchDiffMan()
+        man = meta_mgr.PatchDiffMan()
         inc1 = rpath.RPath(Globals.local_connection,
                            os.path.join(old_test_dir, b"increment1"))
         inc2 = rpath.RPath(Globals.local_connection,
@@ -221,27 +259,27 @@ class MetadataTest(unittest.TestCase):
         compare(man, inc1, 10000)
         write_dir_to_meta(man, inc2, 20000)
         compare(man, inc2, 20000)
-        man.ConvertMetaToDiff()
-        man = PatchDiffMan()
+        man.convert_meta_main_to_diff()
+        man = meta_mgr.PatchDiffMan()
         write_dir_to_meta(man, inc3, 30000)
         compare(man, inc3, 30000)
-        man.ConvertMetaToDiff()
-        man = PatchDiffMan()
+        man.convert_meta_main_to_diff()
+        man = meta_mgr.PatchDiffMan()
         man.max_diff_chain = 3
         write_dir_to_meta(man, inc4, 40000)
         compare(man, inc4, 40000)
-        man.ConvertMetaToDiff()
+        man.convert_meta_main_to_diff()
 
-        man = PatchDiffMan()
+        man = meta_mgr.PatchDiffMan()
         rplist = man.sorted_prefix_inclist(b'mirror_metadata')
-        assert rplist[0].getinctype() == b'snapshot'
-        assert rplist[0].getinctime() == 40000
-        assert rplist[1].getinctype() == b'snapshot'
-        assert rplist[1].getinctime() == 30000
-        assert rplist[2].getinctype() == b'diff'
-        assert rplist[2].getinctime() == 20000
-        assert rplist[3].getinctype() == b'diff'
-        assert rplist[3].getinctime() == 10000
+        self.assertEqual(rplist[0].getinctype(), b'snapshot')
+        self.assertEqual(rplist[0].getinctime(), 40000)
+        self.assertEqual(rplist[1].getinctype(), b'snapshot')
+        self.assertEqual(rplist[1].getinctime(), 30000)
+        self.assertEqual(rplist[2].getinctype(), b'diff')
+        self.assertEqual(rplist[2].getinctime(), 20000)
+        self.assertEqual(rplist[3].getinctype(), b'diff')
+        self.assertEqual(rplist[3].getinctime(), 10000)
 
         compare(man, inc1, 10000)
         compare(man, inc2, 20000)

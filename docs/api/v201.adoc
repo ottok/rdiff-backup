@@ -1,0 +1,198 @@
+= rdiff-backup: {page-name}
+:page-name: v201
+:sectnums:
+:toc: macro
+
+link:..[Home,role="button round"] link:.[API,role="button round"] // *{page-name}*
+
+'''''
+
+toc::[]
+
+== Format
+
+* the old CLI is deprecated and replaced by the new action-based CLI
+
+== Sources
+
+=== Internal
+
+==== rdiff_backup
+
+* `backup.DestinationStruct` **deprecated**
+** `.get_sigs`
+** `.patch`
+** `.patch_and_increment`
+** `.set_rorp_cache`
+* `backup.SourceStruct` **deprecated**
+** `.get_diffs`
+** `.get_source_select`
+** `.set_source_select`
+* `compare.DataSide` **deprecated**
+** `.compare_fast`
+** `.compare_full`
+** `.compare_hash`
+** `.get_source_select` (inherited from SourceStruct)
+* `compare.RepoSide` **deprecated**
+** `.attach_files`
+** `.close_rf_cache` (inherited from MirrorStruct)
+** `.init_and_get_iter`
+* `compare.Verify`  **deprecated**
+* `connection.RedirectedRun`
+* `connection.VirtualFile`
+** `.closebyid`
+** `.readfromid`
+** `.writetoid`
+* `eas_acls.get_acl_lists_from_rp` **unused**
+* `eas_acls.set_rp_acl` **unused**
+* `FilenameMapping.set_init_quote_vals_local`  **deprecated**
+* `fs_abilities.backup_set_globals` **deprecated**
+* `fs_abilities.get_readonly_fsa` **deprecated**
+* `fs_abilities.restore_set_globals` **deprecated**
+* `fs_abilities.single_set_globals` **deprecated**
+* `Globals.get`
+* `Globals.postset_regexp_local`  **deprecated**
+* `Globals.set`  **deprecated**
+* `Globals.set_api_version`  **new**
+* `Globals.set_local`
+* `Hardlink.initialize_dictionaries`  **deprecated**
+* `log.ErrorLog.close`
+* `log.ErrorLog.isopen`
+* `log.ErrorLog.open`
+* `log.ErrorLog.write_if_open`
+* `log.Log.close_logfile_allconn`
+* `log.Log.close_logfile_local`
+* `log.Log.log_to_file`
+* `log.Log.open_logfile_allconn`
+* `log.Log.open_logfile_local`
+* `log.Log.setterm_verbosity`
+* `log.Log.setverbosity`
+* `Main.backup_close_statistics` **deprecated**
+* `Main.backup_remove_curmirror_local` **deprecated**
+* `Main.backup_touch_curmirror_local` **deprecated**
+* `manage.delete_earlier_than_local` **deprecated**
+* `regress.check_pids` **deprecated**
+* `regress.Regress` **deprecated**
+* `restore.ListAtTime` **deprecated**
+* `restore.ListChangedSince` **deprecated**
+* `restore.MirrorStruct` **deprecated**
+** `.close_rf_cache`
+** `.get_diffs`
+** `.get_increment_times`
+** `.initialize_rf_cache`
+** `.set_mirror_and_rest_times`
+** `.set_mirror_select`
+* `restore.TargetStruct` **deprecated**
+** `.get_initial_iter`
+** `.patch`
+** `.set_target_select`
+* `robust.install_signal_handlers`
+* `rpath.copy_reg_file`
+* `rpath.delete_dir_no_files`
+* `rpath.gzip_open_local_read`
+* `rpath.make_file_dict`
+* `rpath.make_socket_local`
+* `rpath.open_local_read`
+* `rpath.RPath.fsync_local`
+* `rpath.setdata_local`
+* `SetConnections.add_redirected_conn`
+* `SetConnections.init_connection_remote`
+* `statistics.record_error`
+* `Time.setcurtime_local`  **deprecated**
+* `Time.setprevtime_local`  **deprecated**
+* `user_group.init_group_mapping`  **deprecated**
+* `user_group.init_user_mapping`  **deprecated**
+
+==== rdiffbackup
+
+* `locations._dir_shadow.ReadDirShadow`  **new**
+** `.compare_full`
+** `.compare_hash`
+** `.compare_meta`
+** `.get_diffs`
+** `.get_fs_abilities`
+** `.get_select`
+** `.set_select`
+* `locations._dir_shadow.WriteDirShadow`  **new**
+** `.apply`
+** `.get_fs_abilities`
+** `.get_sigs_select`
+** `.init_owners_mapping`
+** `.set_select`
+* `locations._repo_shadow.RepoShadow`  **new**
+** `.apply`
+** `.close_statistics`
+** `.finish_loop`
+** `.get_config`
+** `.get_diffs`
+** `.get_fs_abilities_readonly`
+** `.get_fs_abilities_readwrite`
+** `.get_increment_times`
+** `.get_mirror_time`
+** `.get_sigs`
+** `.init_and_get_iter`
+** `.init_owners_mapping`
+** `.init_loop`
+** `.is_locked`
+** `.list_files_at_time`
+** `.list_files_changed_since`
+** `.lock`
+** `.needs_regress`
+** `.regress`
+** `.remove_current_mirror`
+** `.remove_increments_older_than`
+** `.set_config`
+** `.set_select`
+** `.setup_paths`
+** `.touch_current_mirror`
+** `.unlock`
+** `.verify`
+
+=== External
+
+* `gzip.GzipFile` **???**  // perhaps covered by VirtualFile
+* `open` **???**  // perhaps covered by VirtualFile
+* `os.chmod`
+* `os.chown`
+* `os.getuid`
+* `os.lchown`
+* `os.link`
+* `os.listdir`
+* `os.makedev`
+* `os.makedirs`
+* `os.mkdir`
+* `os.mkfifo`
+* `os.mknod`
+* `os.name`  **deprecated**  // never worked remotely
+* `os.rename`
+* `os.rmdir`
+* `os.symlink`
+* `os.unlink`
+* `os.utime`
+* `platform.system`  **new**
+* `shutil.rmtree`
+* `sys.stdout.write`
+* `win32security.ConvertSecurityDescriptorToStringSecurityDescriptor`  **unused**
+* `win32security.ConvertStringSecurityDescriptorToSecurityDescriptor`  **unused**
+* `win32security.GetNamedSecurityInfo`  **unused**
+* `win32security.SetNamedSecurityInfo`  **unused**
+* `xattr.get`  **unused**
+* `xattr.list`  **unused**
+* `xattr.remove`  **unused**
+* `xattr.set`  **unused**
+
+== Testing
+
+=== Internal
+
+=== External
+
+* `hasattr`
+* `int`
+* `ord`
+* `os.lstat`
+* `os.path.join`
+* `os.remove`
+* `pow`
+* `str`
+* `tempfile.mktemp`

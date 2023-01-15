@@ -6,7 +6,8 @@ import sys
 import os
 from commontest import abs_test_dir, re_init_rpath_dir, Myrm, \
     abs_output_dir, rdiff_backup, abs_testing_dir, MakeOutputDir
-from rdiff_backup import hash, rpath, restore, metadata, Globals, SetConnections
+from rdiff_backup import hash, rpath, Globals, Security, SetConnections
+from rdiffbackup.meta import stdattr
 
 
 class HashTest(unittest.TestCase):
@@ -25,16 +26,16 @@ class HashTest(unittest.TestCase):
         b1 = self.s1.encode()
         sfile = io.BytesIO(b1)
         fw = hash.FileWrapper(sfile)
-        assert fw.read() == b1
+        self.assertEqual(fw.read(), b1)
         report = fw.close()
-        assert report.sha1_digest == self.s1_hash, report.sha1_digest
+        self.assertEqual(report.sha1_digest, self.s1_hash)
 
         sfile2 = io.BytesIO(b1)
         fw2 = hash.FileWrapper(sfile2)
-        assert fw2.read(5) == b1[:5]
-        assert fw2.read() == b1[5:]
+        self.assertEqual(fw2.read(5), b1[:5])
+        self.assertEqual(fw2.read(), b1[5:])
         report2 = fw2.close()
-        assert report2.sha1_digest == self.s1_hash, report2.sha1_digest
+        self.assertEqual(report2.sha1_digest, self.s1_hash)
 
     def make_dirs(self):
         """Make two input directories"""
@@ -73,7 +74,7 @@ class HashTest(unittest.TestCase):
         """Return list of hashes in the metadata_rp"""
         result = []
         comp = metadata_rp.isinccompressed()
-        extractor = metadata.RorpExtractor(metadata_rp.open("r", comp))
+        extractor = stdattr.AttrExtractor(metadata_rp.open("r", comp))
         for rorp in extractor.iterate():
             if rorp.has_sha1():
                 result.append(rorp.get_sha1())
@@ -81,8 +82,8 @@ class HashTest(unittest.TestCase):
                 result.append(None)
         return result
 
-    @unittest.skip("Skipping until hash of hard links is fixed, see issue #23."
-                   )
+    @unittest.skip(
+        "Skipping until hash of hard links is fixed, see issue #23.")
     def test_session(self):
         """Run actual sessions and make sure proper hashes recorded
 
@@ -99,35 +100,36 @@ class HashTest(unittest.TestCase):
             Globals.local_connection,
             os.path.join(abs_output_dir, b"rdiff-backup-data",
                          b"mirror_metadata"))
-        incs = restore.get_inclist(meta_prefix)
-        assert len(incs) == 1
+        incs = meta_prefix.get_incfiles_list()
+        self.assertEqual(len(incs), 1)
         metadata_rp = incs[0]
         hashlist = self.extract_hashs(metadata_rp)
-        assert hashlist == hashlist1, (hashlist1, hashlist)
+        self.assertEqual(hashlist, hashlist1)
 
         rdiff_backup(1, 1, in_rp2.path, abs_output_dir, 20000)
-        incs = restore.get_inclist(meta_prefix)
-        assert len(incs) == 2
+        incs = meta_prefix.get_incfiles_list()
+        self.assertEqual(len(incs), 2)
         if incs[0].getinctype() == 'snapshot':
             inc = incs[0]
         else:
             inc = incs[1]
         hashlist = self.extract_hashs(inc)
-        assert hashlist == hashlist2, (hashlist2, hashlist)
+        self.assertEqual(hashlist, hashlist2)
 
     def test_rorpiter_xfer(self):
         """Test if hashes are transferred in files, rorpiter"""
-        Globals.security_level = 'override'
-        conn = SetConnections.init_connection(
+        Security._security_level = "override"
+        conn = SetConnections._init_connection(
             b'%b %b/server.py' %
             (os.fsencode(sys.executable), abs_testing_dir))
-        assert conn.reval("lambda x: x+1", 4) == 5  # connection sanity check
+        # make a connection sanity check
+        self.assertEqual(conn.reval("lambda x: x+1", 4), 5)
 
         fp = hash.FileWrapper(io.BytesIO(self.s1.encode()))
         conn.Globals.set('tmp_file', fp)
         fp_remote = conn.Globals.get('tmp_file')
-        assert fp_remote.read() == self.s1.encode()
-        assert fp_remote.close().sha1_digest == self.s1_hash
+        self.assertEqual(fp_remote.read(), self.s1.encode())
+        self.assertEqual(fp_remote.close().sha1_digest, self.s1_hash)
 
         # Tested xfer of file, now test xfer of files in rorpiter
         root = MakeOutputDir()
@@ -145,17 +147,15 @@ class HashTest(unittest.TestCase):
         rorp1 = next(remote_iter)
         fp = hash.FileWrapper(rorp1.open('rb'))
         read_s1 = fp.read().decode()
-        assert read_s1 == self.s1, "Read string 1 %s isn't the same as written string %s" % (
-            read_s1, self.s1)
+        self.assertEqual(read_s1, self.s1)
         ret_val = fp.close()
-        assert isinstance(ret_val, hash.Report), ret_val
-        assert ret_val.sha1_digest == self.s1_hash
+        self.assertIsInstance(ret_val, hash.Report)
+        self.assertEqual(ret_val.sha1_digest, self.s1_hash)
         rorp2 = next(remote_iter)
         fp2 = hash.FileWrapper(rorp2.open('rb'))
         read_s2 = fp2.read().decode()
-        assert read_s2 == self.s2, "Read string 2 %s isn't the same as written string %s" % (
-            read_s2, self.s2)
-        assert fp2.close().sha1_digest == self.s2_hash
+        self.assertEqual(read_s2, self.s2)
+        self.assertEqual(fp2.close().sha1_digest, self.s2_hash)
 
         conn.quit()
 

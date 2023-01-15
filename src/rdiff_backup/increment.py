@@ -19,56 +19,89 @@
 """Provides functions and *ITR classes, for writing increment files"""
 
 import os
-from . import Globals, Time, rpath, Rdiff, log, statistics, robust
+from rdiff_backup import Globals, log, Rdiff, robust, rpath, statistics, Time
 
 
-def Increment(new, mirror, incpref):
-    """Main file incrementing function, returns inc file created
+def Increment(new, mirror, incpref, inc_time=None):
+    """
+    Main file incrementing function, returns inc file created
 
     new is the file on the active partition,
     mirror is the mirrored file from the last backup,
     incpref is the prefix of the increment file.
 
     This function basically moves the information about the mirror
-    file to incpref.
-
+    file to incpref, inc_time being the (previous) time of the mirror.
     """
-    log.Log("Incrementing mirror file %s" % mirror.get_safepath(), 5)
+    log.Log("Incrementing mirror file {mf}".format(mf=mirror), log.INFO)
     if ((new and new.isdir()) or mirror.isdir()) and not incpref.lstat():
         incpref.mkdir()
 
+    if inc_time is None:  # compat200
+        inc_time = Time.prevtime
+
     if not mirror.lstat():
-        incrp = makemissing(incpref)
+        incrp = _make_missing_increment(incpref, inc_time)
     elif mirror.isdir():
-        incrp = makedir(mirror, incpref)
+        incrp = _make_dir_increment(mirror, incpref, inc_time)
     elif new.isreg() and mirror.isreg():
-        incrp = makediff(new, mirror, incpref)
+        incrp = _make_diff_increment(new, mirror, incpref, inc_time)
     else:
-        incrp = makesnapshot(mirror, incpref)
+        incrp = _make_snapshot_increment(mirror, incpref, inc_time)
     statistics.process_increment(incrp)
     return incrp
 
 
-def makemissing(incpref):
+def get_inc(rp, typestr, inc_time):
+    """
+    Return increment like rp but with time and typestr suffixes
+
+    To avoid any quoting, the returned rpath has empty index, and the
+    whole filename is in the base (which is not quoted).
+    """
+    if inc_time is None:  # compat200
+        inc_time = Time.prevtime
+
+    def addtostr(s):
+        return b'.'.join(map(os.fsencode,
+                             (s, Time.timetostring(inc_time), typestr)))
+
+    if rp.index:
+        incrp = rp.__class__(rp.conn, rp.base,
+                             rp.index[:-1] + (addtostr(rp.index[-1]), ))
+    else:
+        dirname, basename = rp.dirsplit()
+        incrp = rp.__class__(rp.conn, dirname, (addtostr(basename), ))
+    if incrp.lstat():
+        log.Log.FatalError(
+            "New increment path '{ip}' shouldn't exist, something went "
+            "really wrong.".format(ip=incrp))
+    return incrp
+
+
+# === Internal functions ===
+
+
+def _make_missing_increment(incpref, inc_time):
     """Signify that mirror file was missing"""
-    incrp = get_inc(incpref, "missing")
+    incrp = get_inc(incpref, "missing", inc_time)
     incrp.touch()
     return incrp
 
 
-def iscompressed(mirror):
+def _is_compressed(mirror):
     """Return true if mirror's increments should be compressed"""
     return (Globals.compression
             and not Globals.no_compression_regexp.match(mirror.path))
 
 
-def makesnapshot(mirror, incpref):
+def _make_snapshot_increment(mirror, incpref, inc_time):
     """Copy mirror to incfile, since new is quite different"""
-    compress = iscompressed(mirror)
+    compress = _is_compressed(mirror)
     if compress and mirror.isreg():
-        snapshotrp = get_inc(incpref, b"snapshot.gz")
+        snapshotrp = get_inc(incpref, b"snapshot.gz", inc_time)
     else:
-        snapshotrp = get_inc(incpref, b"snapshot")
+        snapshotrp = get_inc(incpref, b"snapshot", inc_time)
 
     if mirror.isspecial():  # check for errors when creating special increments
         eh = robust.get_error_handler("SpecialFileError")
@@ -83,13 +116,13 @@ def makesnapshot(mirror, incpref):
     return snapshotrp
 
 
-def makediff(new, mirror, incpref):
+def _make_diff_increment(new, mirror, incpref, inc_time):
     """Make incfile which is a diff new -> mirror"""
-    compress = iscompressed(mirror)
+    compress = _is_compressed(mirror)
     if compress:
-        diff = get_inc(incpref, b"diff.gz")
+        diff = get_inc(incpref, b"diff.gz", inc_time)
     else:
-        diff = get_inc(incpref, b"diff")
+        diff = get_inc(incpref, b"diff", inc_time)
 
     old_new_perms, old_mirror_perms = (None, None)
 
@@ -113,32 +146,9 @@ def makediff(new, mirror, incpref):
     return diff
 
 
-def makedir(mirrordir, incpref):
+def _make_dir_increment(mirrordir, incpref, inc_time):
     """Make file indicating directory mirrordir has changed"""
-    dirsign = get_inc(incpref, "dir")
+    dirsign = get_inc(incpref, "dir", inc_time)
     dirsign.touch()
     rpath.copy_attribs_inc(mirrordir, dirsign)
     return dirsign
-
-
-def get_inc(rp, typestr, time=None):
-    """Return increment like rp but with time and typestr suffixes
-
-    To avoid any quoting, the returned rpath has empty index, and the
-    whole filename is in the base (which is not quoted).
-
-    """
-    if time is None:
-        time = Time.prevtime
-
-    def addtostr(s):
-        return b'.'.join(map(os.fsencode, (s, Time.timetostring(time), typestr)))
-
-    if rp.index:
-        incrp = rp.__class__(rp.conn, rp.base,
-                             rp.index[:-1] + (addtostr(rp.index[-1]), ))
-    else:
-        dirname, basename = rp.dirsplit()
-        incrp = rp.__class__(rp.conn, dirname, (addtostr(basename), ))
-    assert not incrp.lstat(), incrp
-    return incrp

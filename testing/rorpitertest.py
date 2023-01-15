@@ -1,7 +1,8 @@
 import unittest
 import pickle
 import os
-from commontest import old_test_dir, abs_output_dir, CompareRecursive, iter_equal
+from commontest import old_test_dir, abs_output_dir, \
+    compare_recursive, iter_equal
 from rdiff_backup import rpath, rorpiter, Globals
 from functools import reduce
 
@@ -34,22 +35,24 @@ class RORPIterTest(unittest.TestCase):
         makeiter3 = lambda: iter(map(helper, [1, 2]))  # noqa: E731 use def instead of lambda
 
         outiter = rorpiter.CollateIterators(makeiter1(), makeiter2())
-        assert iter_equal(
+        self.assertTrue(iter_equal(
             outiter,
             iter([(indices[0], indices[0]), (indices[1], indices[1]),
-                  (indices[2], None), (indices[3], indices[3])]))
+                  (indices[2], None), (indices[3], indices[3])])))
 
-        assert iter_equal(
+        self.assertTrue(iter_equal(
             rorpiter.CollateIterators(makeiter1(), makeiter2(), makeiter3()),
             iter([(indices[0], indices[0], None),
                   (indices[1], indices[1], indices[1]),
                   (indices[2], None, indices[2]),
-                  (indices[3], indices[3], None)]))
+                  (indices[3], indices[3], None)])))
 
-        assert iter_equal(rorpiter.CollateIterators(makeiter1(), iter([])),
-                          iter([(i, None) for i in indices]))
-        assert iter_equal(iter([(i, None) for i in indices]),
-                          rorpiter.CollateIterators(makeiter1(), iter([])))
+        self.assertTrue(
+            iter_equal(rorpiter.CollateIterators(makeiter1(), iter([])),
+                       iter([(i, None) for i in indices])))
+        self.assertTrue(
+            iter_equal(iter([(i, None) for i in indices]),
+                       rorpiter.CollateIterators(makeiter1(), iter([]))))
 
     def compare_no_times(self, src_rp, dest_rp):
         """Compare but disregard directories attributes"""
@@ -58,7 +61,7 @@ class RORPIterTest(unittest.TestCase):
             return ((src_rorp.isdir() and dest_rorp.isdir())
                     or src_rorp == dest_rorp)
 
-        return CompareRecursive(src_rp, dest_rp, None, equal)
+        return compare_recursive(src_rp, dest_rp, None, equal)
 
 
 class IndexedTupleTest(unittest.TestCase):
@@ -67,17 +70,16 @@ class IndexedTupleTest(unittest.TestCase):
         i = rorpiter.IndexedTuple((1, 2, 3), ("a", "b"))
         i2 = rorpiter.IndexedTuple((), ("hello", "there", "how are you"))
 
-        assert i[0] == "a"
-        assert i[1] == "b"
-        assert i2[1] == "there"
-        assert len(i) == 2 and len(i2) == 3
-        assert i2 < i, i2 < i
+        self.assertEqual(i[0], "a")
+        self.assertEqual(i[1], "b")
+        self.assertEqual(i2[1], "there")
+        self.assertEqual(len(i), 2)
+        self.assertEqual(len(i2), 3)
+        self.assertLess(i2, i)
 
     def testTupleAssignment(self):
         a, b, c = rorpiter.IndexedTuple((), (1, 2, 3))
-        assert a == 1
-        assert b == 2
-        assert c == 3
+        self.assertEqual((a, b, c), (1, 2, 3))
 
 
 class FillTest(unittest.TestCase):
@@ -86,48 +88,51 @@ class FillTest(unittest.TestCase):
         rootrp = rpath.RPath(Globals.local_connection, abs_output_dir)
 
         def get_rpiter():
-            for int_index in [(1, 2), (1, 3), (1, 4), (2, ), (2, 1), (3, 4, 5),
-                              (3, 6)]:
-                index = tuple([str(i) for i in int_index])
+            for index in [('a', 'b'), ('a', 'c'), ('a', 'd'),
+                          ('b', ), ('b', 'a'), ('c', 'd', 'e'), ('c', 'f')]:
                 yield rootrp.new_index(index)
 
         filled_in = rorpiter.FillInIter(get_rpiter(), rootrp)
-        rp_list = list(filled_in)
-        index_list = [tuple(map(int, rp.index)) for rp in rp_list]
-        assert index_list == [(), (1, ), (1, 2), (1, 3), (1, 4), (2, ), (2, 1),
-                              (3, ), (3, 4), (3, 4, 5), (3, 6)], index_list
+        # rpath index is a bytes tuple, needs to be converted to strings.
+        # FillInIter complains about non existing directory 'c' and 'c/d',
+        # this is normal because indeed the directories don't exist.
+        index_list = [tuple(map(os.fsdecode, rp.index)) for rp in filled_in]
+        self.assertEqual(index_list,
+                         [(), ('a', ), ('a', 'b'), ('a', 'c'), ('a', 'd'),
+                          ('b', ), ('b', 'a'),
+                          ('c', ), ('c', 'd'), ('c', 'd', 'e'), ('c', 'f')])
 
 
 class ITRBadder(rorpiter.ITRBranch):
-    def start_process(self, index):
+    def start_process_directory(self, index):
         self.total = 0
 
-    def end_process(self):
+    def end_process_directory(self):
         if self.base_index:
             summand = self.base_index[-1]
             self.total += summand
 
-    def branch_process(self, subinstance):
+    def gather_from_child(self, subinstance):
         self.total += subinstance.total
 
 
 class ITRBadder2(rorpiter.ITRBranch):
-    def start_process(self, index):
+    def start_process_directory(self, index):
         self.total = 0
 
-    def end_process(self):
+    def end_process_directory(self):
         self.total += reduce(lambda x, y: x + y, self.base_index, 0)
 
     def can_fast_process(self, index):
         if len(index) == 3:
-            return 1
+            return True
         else:
-            return None
+            return False
 
-    def fast_process(self, index):
+    def fast_process_file(self, index):
         self.total += index[0] + index[1] + index[2]
 
-    def branch_process(self, subinstance):
+    def gather_from_child(self, subinstance):
         self.total += subinstance.total
 
 
@@ -148,56 +153,56 @@ class TreeReducerTest(unittest.TestCase):
         itm = rorpiter.IterTreeReducer(ITRBadder, [])
         for index in self.i1:
             val = itm(index)
-            assert val, (val, index)
-        itm.Finish()
-        assert itm.root_branch.total == 6, itm.root_branch.total
+            self.assertTrue(val)
+        itm.finish_processing()
+        self.assertEqual(itm.root_branch.total, 6)
 
         itm2 = rorpiter.IterTreeReducer(ITRBadder2, [])
         for index in self.i2:
             val = itm2(index)
             if index == ():
-                assert not val
+                self.assertFalse(val)
             else:
-                assert val
-        itm2.Finish()
-        assert itm2.root_branch.total == 12, itm2.root_branch.total
+                self.assertTrue(val)
+        itm2.finish_processing()
+        self.assertEqual(itm2.root_branch.total, 12)
 
     def testTreeReducerState(self):
         """Test saving and recreation of an IterTreeReducer"""
         itm1a = rorpiter.IterTreeReducer(ITRBadder, [])
         for index in self.i1a:
             val = itm1a(index)
-            assert val, index
+            self.assertTrue(val)
         itm1b = pickle.loads(pickle.dumps(itm1a))
         for index in self.i1b:
             val = itm1b(index)
-            assert val, index
-        itm1b.Finish()
-        assert itm1b.root_branch.total == 6, itm1b.root_branch.total
+            self.assertTrue(val)
+        itm1b.finish_processing()
+        self.assertEqual(itm1b.root_branch.total, 6)
 
         itm2a = rorpiter.IterTreeReducer(ITRBadder2, [])
         for index in self.i2a:
             val = itm2a(index)
             if index == ():
-                assert not val
+                self.assertFalse(val)
             else:
-                assert val
+                self.assertTrue(val)
         itm2b = pickle.loads(pickle.dumps(itm2a))
         for index in self.i2b:
             val = itm2b(index)
             if index == ():
-                assert not val
+                self.assertFalse(val)
             else:
-                assert val
+                self.assertTrue(val)
         itm2c = pickle.loads(pickle.dumps(itm2b))
         for index in self.i2c:
             val = itm2c(index)
             if index == ():
-                assert not val
+                self.assertFalse(val)
             else:
-                assert val
-        itm2c.Finish()
-        assert itm2c.root_branch.total == 12, itm2c.root_branch.total
+                self.assertTrue(val)
+        itm2c.finish_processing()
+        self.assertEqual(itm2c.root_branch.total, 12)
 
 
 class CacheIndexableTest(unittest.TestCase):
@@ -216,15 +221,15 @@ class CacheIndexableTest(unittest.TestCase):
         for i in range(3):  # call 3 times next
             next(ci)
 
-        assert ci.get((1, )) == self.d[(1, )]
-        assert ci.get((3, )) is None
+        self.assertEqual(ci.get((1, )), self.d[(1, )])
+        self.assertIsNone(ci.get((3, )))
 
         for i in range(3):  # call 3 times next
             next(ci)
 
-        assert ci.get((3, )) == self.d[(3, )]
-        assert ci.get((4, )) == self.d[(4, )]
-        assert ci.get((3, 5)) is None
+        self.assertEqual(ci.get((3, )), self.d[(3, )])
+        self.assertEqual(ci.get((4, )), self.d[(4, )])
+        self.assertIsNone(ci.get((3, 5)))
         self.assertRaises(AssertionError, ci.get, (1, ))
 
     def testEqual(self):
@@ -232,7 +237,7 @@ class CacheIndexableTest(unittest.TestCase):
         self.d = {}
         l1 = list(self.get_iter())
         l2 = list(rorpiter.CacheIndexable(iter(l1), 10))
-        assert l1 == l2, (l1, l2)
+        self.assertEqual(l1, l2)
 
 
 if __name__ == "__main__":

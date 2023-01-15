@@ -20,19 +20,49 @@
 
 import re
 import os
-from . import log
+import platform
+import sys
+from rdiff_backup import log
 
 # The current version of rdiff-backup
 # Get it from package info or fall back to DEV version.
+# importlib/metadata is the new approach, pkg_resources the old one, kept for
+# compatibility reasons (and because importlib_metadata -for Python < 3.8-
+# isn't yet packaged for all distros).
 try:
-    import pkg_resources
-    version = pkg_resources.get_distribution("rdiff-backup").version
-except BaseException:
-    version = "DEV"
+    try:
+        from importlib import metadata
+        version = metadata.version('rdiff-backup')
+    except ImportError:
+        try:  # the fallback library for Python below 3.8
+            import importlib_metadata as metadata
+            version = metadata.version('rdiff-backup')
+        except ImportError:
+            # the old method requiring setuptools to be installed
+            import pkg_resources
+            version = pkg_resources.get_distribution("rdiff-backup").version
+except BaseException:  # if everything else fails...
+    version = "DEV.no.metadata"
 
-# If this is set, use this value in seconds as the current time
-# instead of reading it from the clock.
-current_time = None
+# The default, supported (min/max) and actual API versions.
+# An actual value of 0 means that the default version is to be used or whatever
+# makes the connection work within the min-max range, depending on the
+# API versions supported by the remote connection.
+api_version = {
+    "default": 200,
+    "min": 200,
+    "max": 201,
+    "actual": 0
+}
+
+# Pre-defined return codes, they must be potence of 2 so that they can be
+# combined.
+# FIXME consistent implementation of return codes isn't yet done
+RET_CODE_OK = 0  # everything is fine
+RET_CODE_ERR = 1  # some fatal error happened, the whole action failed
+RET_CODE_WARN = 2  # any kind of unexpected issue without complete failure
+RET_CODE_FILE_ERR = 4  # a single file (or more) failure
+RET_CODE_FILE_WARN = 8  # a single file (or more) warning or difference
 
 # This determines how many bytes to read at a time when copying
 blocksize = 131072
@@ -127,11 +157,11 @@ connection_dict = {}
 
 # True if the script is the end that reads the source directory
 # for backups.  It is true for purely local sessions.
-isbackup_reader = None
+isbackup_reader = None  # compat200
 
 # Connection of the real backup reader (for which isbackup_reader
 # is true)
-backup_reader = None
+backup_reader = None  # compat200
 
 # True if the script is the end that writes to the increment and
 # mirror directories.  True for purely local sessions.
@@ -159,9 +189,12 @@ changed_settings = []
 rbdir = None
 
 # chars_to_quote is a string whose characters should be quoted.  It
-# should be true if certain characters in filenames on the source side
-# should be escaped (see FilenameMapping for more info).
+# should be set if certain characters in filenames on the source side
+# should be escaped (see locations.map.filenames for more info).
 chars_to_quote = None
+chars_to_quote_regexp = None
+chars_to_quote_unregexp = None
+# the quoting character is used to mark quoted characters
 quoting_char = b';'
 
 # evaluate if DOS device names (AUX, PRN, CON, NUL, COM, LPT) should be quoted
@@ -181,10 +214,6 @@ use_compatible_timestamps = 0
 
 allow_duplicate_timestamps = False
 
-# If true, emit output intended to be easily readable by a
-# computer.  False means output is intended for humans.
-parsable_output = None
-
 # If true, then hardlinks will be preserved to mirror and recorded
 # in the increments directory.  There is also a difference here
 # between None and 0.  When restoring, None or 1 means to preserve
@@ -198,20 +227,14 @@ compression = 1
 
 # Increments based on files whose names match this
 # case-insensitive regular expression won't be compressed (applies
-# to .snapshots and .diffs).  The second below will be the
-# compiled version of the first.
-no_compression_regexp_string = (
-    b"(?i).*\\.(gz|z|bz|bz2|tgz|zip|zst|rpm|deb|"
-    b"jpg|jpeg|gif|png|jp2|mp3|mp4|ogg|ogv|oga|ogm|avi|wmv|mpeg|mpg|rm|mov|mkv|flac|shn|pgp|"
-    b"gpg|rz|lz4|lzh|lzo|zoo|lharc|rar|arj|asc|vob|mdf)$")
+# to .snapshots and .diffs).
+# The regexp is the compiled version of the argument provided by
+# --no-compression-regexp (or its default value)
 no_compression_regexp = None
 
 # If true, filelists and directory statistics will be split on
 # nulls instead of newlines.
 null_separator = None
-
-# Determines whether or not ssh will be run with the -C switch
-ssh_compression = 1
 
 # If true, print statistics after successful backup
 print_statistics = None
@@ -220,25 +243,9 @@ print_statistics = None
 # rdiff-backup-data dir.  These can sometimes take up a lot of space.
 file_statistics = 1
 
-# On the writer connection, the following will be set to the mirror
-# Select iterator.
-select_mirror = None
-
 # On the backup writer connection, holds the root incrementing branch
 # object.  Access is provided to increment error counts.
 ITRB = None
-
-# security_level has 4 values and controls which requests from remote
-# systems will be honored.  "all" means anything goes. "read-only"
-# means that the requests must not write to disk.  "update-only" means
-# that requests shouldn't destructively update the disk (but normal
-# incremental updates are OK).  "minimal" means only listen to a few
-# basic requests.
-security_level = "all"
-
-# If this is set, it indicates that the remote connection should only
-# deal with paths inside of restrict_path.
-restrict_path = None
 
 # If set, a file will be marked as changed if its inode changes.  See
 # the man page under --no-compare-inode for more information.
@@ -270,30 +277,55 @@ remote_tempdir = None
 # and pre-regress
 do_fsync = True
 
+# This is the current time, either as integer (epoch) or formatted string.
+# It is set once at the beginning of the program and defines the backup's
+# date and time
+current_time = None
+current_time_string = None
 
+# This represents the pickle protocol used by rdiff-backup over the connection
+# https://docs.python.org/3/library/pickle.html#pickle-protocols
+# Note that the receiving end will automatically recognize the protocol used so
+# that both ends don't need to use the same one to send, as long as they both
+# understand the maximum protocol version used.
+# Protocol 4 is understood since Python 3.4, protocol 5 since 3.8.
+PICKLE_PROTOCOL = 4
+
+
+# @API(get, 200)
 def get(name):
     """Return the value of something in this module"""
     return globals()[name]
 
 
-def is_not_None(name):
-    """Returns true if value is not None"""
-    return globals()[name] is not None
-
-
+# @API(set, 200, 200)
 def set(name, val):
-    """Set the value of something in this module
+    """
+    Set the value of something in this module on this connection and, delayed,
+    on all others
 
     Use this instead of writing the values directly if the setting
     matters to remote sides.  This function updates the
-    changed_settings list, so other connections know to copy the
-    changes.
-
+    changed_settings list, so other connections know to copy the changes
+    during connection initiation. After the connection has been initiated,
+    use C<set_all> instead.
     """
     changed_settings.append(name)
     globals()[name] = val
 
 
+def set_all(setting_name, value):
+    """
+    Sets the setting given to the value on all connections
+
+    Where set relies on each connection to grab the value at a later stage,
+    set_all forces the value on all connections at once.
+    """
+    for conn in connection_dict.values():
+        conn.Globals.set_local(setting_name, value)
+
+
+# @API(set_local, 200)
 def set_local(name, val):
     """Like set above, but only set current connection"""
     globals()[name] = val
@@ -304,69 +336,61 @@ def set_integer(name, val):
     try:
         intval = int(val)
     except ValueError:
-        log.Log.FatalError("Variable %s must be set to an integer -\n"
-                           "received %s instead." % (name, val))
+        log.Log.FatalError("Variable {vr} must be set to an integer, received "
+                           "value '{vl}' instead".format(vr=name, vl=val))
     set(name, intval)
 
 
-def set_float(name, val, min=None, max=None, inclusive=1):
-    """Like set, but make sure val is float within given bounds"""
-
-    def error():
-        s = "Variable %s must be set to a float" % (name, )
-        if min is not None and max is not None:
-            s += " between %s and %s " % (min, max)
-            if inclusive:
-                s += "inclusive"
-            else:
-                s += "not inclusive"
-        elif min is not None or max is not None:
-            if inclusive:
-                inclusive_string = "or equal to "
-            else:
-                inclusive_string = ""
-            if min is not None:
-                s += " greater than %s%s" % (inclusive_string, min)
-            else:
-                s += " less than %s%s" % (inclusive_string, max)
-        log.Log.FatalError(s)
-
-    try:
-        f = float(val)
-    except ValueError:
-        error()
-    if min is not None:
-        if inclusive and f < min:
-            error()
-        elif not inclusive and f <= min:
-            error()
-    if max is not None:
-        if inclusive and f > max:
-            error()
-        elif not inclusive and f >= max:
-            error()
-    set(name, f)
-
-
-def get_dict_val(name, key):
-    """Return val from dictionary in this class"""
-    return globals()[name][key]
-
-
-def set_dict_val(name, key, val):
-    """Set value for dictionary in this class"""
-    globals()[name][key] = val
-
-
-def postset_regexp(name, re_string, flags=None):
-    """Compile re_string on all existing connections, set to name"""
-    for conn in connections:
-        conn.Globals.postset_regexp_local(name, re_string, flags)
-
-
+# @API(postset_regexp_local, 200, 200)
 def postset_regexp_local(name, re_string, flags):
     """Set name to compiled re_string locally"""
+    re_string = os.fsencode(re_string)
     if flags:
         globals()[name] = re.compile(re_string, flags)
     else:
         globals()[name] = re.compile(re_string)
+
+
+# @API(set_api_version, 201)
+def set_api_version(val):
+    """sets the actual API version after having verified that the new
+    value is an integer between mix and max values."""
+    try:
+        intval = int(val)
+    except ValueError:
+        log.Log.FatalError("API version must be set to an integer, "
+                           "received value {va} instead.".format(va=val))
+    if intval < api_version["min"] or intval > api_version["max"]:
+        log.Log.FatalError(
+            "API version {av} must be between {mi} and {ma}.".format(
+                av=val, mi=api_version["min"], ma=api_version["max"]))
+    api_version["actual"] = intval
+
+
+def get_api_version():
+    """Return the actual API version, either set explicitly or the default
+    one"""
+    return api_version["actual"] or api_version["default"]
+
+
+def get_runtime_info(parsed=None):
+    """Return a structure containing all relevant runtime information about
+    the executable, Python and the operating system.
+    Beware that additional information might be added at any time."""
+    return {
+        'exec': {
+            'version': version,
+            'api_version': api_version,
+            'argv': sys.argv,
+            'parsed': parsed,
+        },
+        'python': {
+            'name': sys.implementation.name,
+            'executable': sys.executable,
+            'version': platform.python_version(),
+        },
+        'system': {
+            'platform': platform.platform(),
+            'fs_encoding': sys.getfilesystemencoding(),
+        },
+    }
