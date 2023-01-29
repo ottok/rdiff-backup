@@ -1,8 +1,12 @@
-rdiff-backup (2.2.2-1) UNRELEASED; urgency=medium
+rdiff-backup (2.2.2-1) unstable; urgency=medium
 
   * New upstream version 2.2.2
+  * Add 'asciidoctor' as build dependency so man page generation works
+  * Add 'PyYAML' as new dependency introduced in 2.1
+  * Update standards version to 4.6.2 and fix minor Lintian nags
+  * Update autopkgtest to match new output in rdiff-backup 2.2
 
- -- Otto Kekäläinen <otto@debian.org>  Sat, 14 Jan 2023 18:43:36 -0800
+ -- Otto Kekäläinen <otto@debian.org>  Sun, 29 Jan 2023 12:31:40 -0800
 
 rdiff-backup (2.0.5-4) unstable; urgency=medium
 
