@@ -1,0 +1,4 @@
+# Upstream aware in https://github.com/rdiff-backup/rdiff-backup/pull/828
+# but issue is not severe, so overriding
+source-is-missing [docs/js/foundation.min.js]
+source-is-missing [docs/js/foundation/foundation.abide.js]
