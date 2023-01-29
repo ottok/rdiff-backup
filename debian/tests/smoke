@@ -9,7 +9,7 @@ set -ex
 #   Fatal Error: No arguments given
 #   See the rdiff-backup manual page for more information.
 
-if rdiff-backup --print-statistics 2>&1 | grep -q 'No arguments given'
+if rdiff-backup --print-statistics 2>&1 | grep -qF 'rdiff-backup: error: Action backup requires 2 location(s) instead of [].'
 then
   echo "Basic smoke test passed"
 else
