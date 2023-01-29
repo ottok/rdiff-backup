@@ -14,7 +14,7 @@ Build-Depends: asciidoctor,
                python3-setuptools,
                python3-setuptools-scm,
                python3-yaml
-Standards-Version: 4.6.1
+Standards-Version: 4.6.2
 Homepage: https://rdiff-backup.net/
 Vcs-Git: https://salsa.debian.org/python-team/applications/rdiff-backup.git
 Vcs-Browser: https://salsa.debian.org/python-team/applications/rdiff-backup
