@@ -144,7 +144,9 @@ def rdiff_backup(source_local,
 def rdiff_backup_action(source_local, dest_local,
                         src_dir, dest_dir,
                         generic_opts, action, specific_opts,
-                        std_input=None, return_stdout=False):
+                        std_input=None,
+                        return_stdout=False,
+                        return_stderr=False):
     """
     Run rdiff-backup with the given action and options, faking remote locations
 
@@ -163,12 +165,15 @@ def rdiff_backup_action(source_local, dest_local,
     """
     remote_exec = CMD_SEP.join([b"cd %s", b"%s server::%s"])
 
+    is_remote = False
     if src_dir and not source_local:
         src_dir = (remote_exec % (abs_remote1_dir, RBBin, src_dir))
+        is_remote = True
     if dest_dir and not dest_local:
         dest_dir = (remote_exec % (abs_remote2_dir, RBBin, dest_dir))
+        is_remote = True
 
-    if not (source_local and dest_local):
+    if is_remote:
         generic_opts = list(generic_opts) + [b"--remote-schema", b"{h}"]
 
     cmdargs = [RBBin] + list(generic_opts) + [action] + list(specific_opts)
@@ -178,10 +183,15 @@ def rdiff_backup_action(source_local, dest_local,
     if dest_dir:
         cmdargs.append(dest_dir)
     print("Executing: ", " ".join(map(shlex.quote, map(os.fsdecode, cmdargs))))
-    if return_stdout:
+    if return_stdout or return_stderr:
         try:
-            ret_val = subprocess.check_output(cmdargs, input=std_input,
-                                              universal_newlines=False)
+            if return_stderr:  # add stderr to stdout
+                ret_val = subprocess.check_output(cmdargs, input=std_input,
+                                                  stderr=subprocess.STDOUT,
+                                                  universal_newlines=False)
+            else:
+                ret_val = subprocess.check_output(cmdargs, input=std_input,
+                                                  universal_newlines=False)
         except subprocess.CalledProcessError as exc:
             ret_val = exc.output
         # normalize line endings under Windows

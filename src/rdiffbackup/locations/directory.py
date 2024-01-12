@@ -81,7 +81,7 @@ class ReadDir(Dir, locations.ReadLocation):
         # I suspect that not all users can read symlinks with os.readlink
         if (is_windows
                 and ("--exclude-symbolic-links", None) not in select_opts):
-            log.Log("Symbolic links excluded by default on Windows",
+            log.Log("Symbolic links excluded on Windows",
                     log.NOTE)
             select_opts.insert(0, ("--exclude-symbolic-links", None))
         if Globals.get_api_version() < 201:  # compat200
@@ -148,8 +148,10 @@ class WriteDir(Dir, locations.WriteLocation):
             else:
                 log.Log("--- Write directory file system capabilities ---\n"
                         + str(self.fs_abilities), log.INFO)
+            ret_code |= fs_abilities.Repo2DirSetGlobals(src_repo, self)()
 
-            return ret_code | fs_abilities.Repo2DirSetGlobals(src_repo, self)()
+            if ret_code & Globals.RET_CODE_ERR:
+                return ret_code
 
         if owners_map is not None:
             ret_code |= self.init_owners_mapping(**owners_map)

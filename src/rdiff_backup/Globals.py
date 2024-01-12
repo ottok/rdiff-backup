@@ -22,6 +22,7 @@ import re
 import os
 import platform
 import sys
+import yaml
 from rdiff_backup import log
 
 # The current version of rdiff-backup
@@ -54,6 +55,10 @@ api_version = {
     "max": 201,
     "actual": 0
 }
+# Allow overwrite from the environment variable RDIFF_BACKUP_API_VERSION
+# we don't do a lot of error handling because it's more of a dev option
+api_version.update(yaml.safe_load(
+    os.environ.get('RDIFF_BACKUP_API_VERSION', '{}')))
 
 # Pre-defined return codes, they must be potence of 2 so that they can be
 # combined.
@@ -246,6 +251,10 @@ file_statistics = 1
 # On the backup writer connection, holds the root incrementing branch
 # object.  Access is provided to increment error counts.
 ITRB = None
+
+# If this is set, it indicates that the remote connection should only
+# deal with paths inside of restrict_path.
+restrict_path = None  # compat200
 
 # If set, a file will be marked as changed if its inode changes.  See
 # the man page under --no-compare-inode for more information.
