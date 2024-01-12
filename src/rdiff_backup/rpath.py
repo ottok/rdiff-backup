@@ -634,8 +634,8 @@ class RPath(RORPath):
     identification (i.e. if two files have the the same (==) data
     dictionary, they are the same file).
     """
-    # class index to make temporary files unique, see get_temp_rpath
-    _temp_file_index = 0
+    # class index to make temporary files unique, see _get_next_tempfile_name
+    _temp_file_index = -1
 
     def __init__(self, connection, base, index=(), data=None):
         """
@@ -1094,30 +1094,22 @@ class RPath(RORPath):
         if sibling or not self.isdir():
             return self.get_parent_rp().get_temp_rpath()
 
+        # When the file system hosting the rdiff-backup-data directory
+        # is (almost) full and when the --tempdir flag is defined,
+        # attempt to save temporary files on a different path and
+        # hopefully file system.
+        if (tempfile.tempdir
+                and shutil.disk_usage(self.path).free < 0):  # 1048576):
+            # FIXME disabled because os.rename between file systems fails
+            tempdir = self.newpath(tempfile.tempdir)
+        else:
+            tempdir = self  # at this stage, we know self is a directory
+
         # we have to create our own "uniqueness" as tempfile.mktemp is
         # obsolete and we just want a name agnostic regarding file vs. dir
         while True:
-            if self.__class__._temp_file_index > 100000000:
-                log.Log("Resetting tempfile index", log.NOTE)
-                self.__class__._temp_file_index = 0
+            tf = tempdir.append(self._get_next_tempfile_name())
 
-            # When the file system hosting the rdiff-backup-data directory
-            # is full and when the --tempdir flag is defined, attempt to save
-            # temporary files on a different path / file system.
-            if tempfile.tempdir and (shutil.disk_usage(self.path).free == 0):
-                # If tempfile.tempdir is manually passed in via the --tempdir
-                # cli flag, it defaults being a bytes string, as such we need to
-                # convert the target path to a string first
-                tempdir = os.fsdecode(tempfile.tempdir)
-            else:
-                tempdir = None
-
-            _tf = 'rdiff-backup.tmp.{index:d}'.format(index=self.__class__._temp_file_index)
-            if not tempdir:
-                tf = self.append(_tf)
-            else:
-                tf = os.path.join(tempdir, _tf)
-            self.__class__._temp_file_index += 1
             if not tf.lstat():
                 return tf
 
@@ -1417,6 +1409,17 @@ class RPath(RORPath):
         acl_win.write_meta(self, acl_meta)
         self.data['win_acl'] = acl_meta
 
+    @classmethod
+    def _get_next_tempfile_name(cls):
+        """
+        Internal function to increment index and return temporary file name
+        """
+        cls._temp_file_index += 1
+        if cls._temp_file_index > 100000000:
+            log.Log("Resetting tempfile index", log.NOTE)
+            cls._temp_file_index = 0
+        return "rdiff-backup.tmp.{idx:d}".format(idx=cls._temp_file_index)
+
     def _debug_consistency(self):
         """Raise an error if consistency of rp broken
 
@@ -1628,11 +1631,11 @@ def copy_reg_file(rpin, rpout, compress=0):
 
 
 def cmp(rpin, rpout):
-    """True if rpin has the same data as rpout
+    """
+    True if rpin has the same data as rpout
 
     does not compare file ownership, permissions, or times, or
     examine the contents of a directory.
-
     """
     _check_for_files(rpin, rpout)
     if rpin.isreg():
@@ -1658,11 +1661,11 @@ def cmp(rpin, rpout):
 
 
 def copy_attribs(rpin, rpout):
-    """Change file attributes of rpout to match rpin
+    """
+    Change file attributes of rpout to match rpin
 
     Only changes the chmoddable bits, uid/gid ownership, and
     timestamps, so both must already exist.
-
     """
     log.Log("Copying attributes from path {fp!r} to path {tp!r}".format(
         fp=rpin, tp=rpout), log.DEBUG)
@@ -1674,6 +1677,8 @@ def copy_attribs(rpin, rpout):
     if Globals.change_ownership:
         rpout.chown(*map_owners.map_rpath_owner(rpin))
     if Globals.eas_write:
+        if not rpin.issym():  # make sure EAs can be written
+            rpout.chmod(rpin.getperms() | 0o666)
         rpout.write_ea(rpin.get_ea())
     if rpin.issym():
         return  # symlinks don't have times or perms
@@ -1692,12 +1697,12 @@ def copy_attribs(rpin, rpout):
 
 
 def copy_attribs_inc(rpin, rpout):
-    """Change file attributes of rpout to match rpin
+    """
+    Change file attributes of rpout to match rpin
 
     Like above, but used to give increments the same attributes as the
     originals.  Therefore, don't copy all directory acl and
     permissions.
-
     """
     log.Log("Copying inc attributes from path {fp!r} to path {tp!r}".format(
         fp=rpin, tp=rpout), log.DEBUG)
@@ -1918,36 +1923,48 @@ def delete_dir_no_files(rp):
 
 
 # @API(setdata_local, 200)
-def setdata_local(rpath):
-    """Set eas/acls, uid/gid, resource fork in data dictionary
+def setdata_local(rp):
+    """
+    Set eas/acls, uid/gid, resource fork in data dictionary
 
     This is a global function because it must be called locally, since
     these features may exist or not depending on the connection.
-
     """
-    assert rpath.conn is Globals.local_connection, (
+    assert rp.conn is Globals.local_connection, (
         "Function must be called locally not over {conn}.".format(
-            conn=rpath.conn))
+            conn=rp.conn))
     reset_perms = False
-    if (Globals.process_uid != 0 and not rpath.readable() and rpath.isowner()):
-        reset_perms = True
-        rpath.chmod(0o400 | rpath.getperms())
+    if (Globals.process_uid != 0 and not rp.readable() and rp.isowner()):
+        if rp.lstat() == "sym":
+            # a symlink which isn't readable is strange, hence better not backup
+            # only case known is 'C:\Users\All Users' mounted over Samba
+            # Neither Windows nor Linux support chmod without following
+            # symlinks, so we would anyway try to chmod the file pointed at,
+            # not the symlink itself
+            rp.data["type"] = None
+            log.ErrorLog.write_if_open(
+                "ListError", rp,
+                OSError("[Errno n/a] Ignoring strange unreadable symlink"))
+            return
+        else:
+            reset_perms = True
+            rp.chmod(0o400 | rp.getperms())
 
-    rpath.data['uname'] = usrgrp.uid2uname(rpath.data['uid'])
-    rpath.data['gname'] = usrgrp.gid2gname(rpath.data['gid'])
+    rp.data['uname'] = usrgrp.uid2uname(rp.data['uid'])
+    rp.data['gname'] = usrgrp.gid2gname(rp.data['gid'])
     if Globals.eas_conn:
-        rpath.data['ea'] = ea.get_meta(rpath)
+        rp.data['ea'] = ea.get_meta(rp)
     if Globals.acls_conn:
-        rpath.data['acl'] = acl_posix.get_meta(rpath)
+        rp.data['acl'] = acl_posix.get_meta(rp)
     if Globals.win_acls_conn:
-        rpath.data['win_acl'] = acl_win.get_meta(rpath)
-    if Globals.resource_forks_conn and rpath.isreg():
-        rpath.get_resource_fork()
-    if Globals.carbonfile_conn and rpath.isreg():
-        rpath.data['carbonfile'] = _carbonfile_get(rpath)
+        rp.data['win_acl'] = acl_win.get_meta(rp)
+    if Globals.resource_forks_conn and rp.isreg():
+        rp.get_resource_fork()
+    if Globals.carbonfile_conn and rp.isreg():
+        rp.data['carbonfile'] = _carbonfile_get(rp)
 
     if reset_perms:
-        rpath.chmod(rpath.getperms() & ~0o400)
+        rp.chmod(rp.getperms() & ~0o400)
 
 
 def _carbonfile_get(rp):

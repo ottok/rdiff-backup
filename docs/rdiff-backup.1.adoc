@@ -42,7 +42,7 @@ The rdiff-backup commands knows four types of parameters
 Note that this documents the _new_ command line interface of rdiff-backup since 2.1+;
 for the traditional one, check *rdiff-backup-old(1)* but consider that it is deprecated and will disappear.
 
-=== Options
+=== Generic options
 
 -h, --help::
 Prints brief usage information and exits.
@@ -193,7 +193,7 @@ sizes of that directory will be shown.
 regress [<<_compression_options,COMPRESSION OPTIONS>>] [<<_user_group_options,USER GROUP OPTIONS>>] [<<_timestamp_options,TIMESTAMP OPTIONS>>] _repository_::
 If an rdiff-backup session fails, this action will undo the failed directory.
 This happens automatically if you attempt to back-up to a directory and the last backup failed.
-You can use the *--force* option to undo the last backup even if it wasn't failed.
+You can use the *--force* option to undo the last backup even if it wasn't failed (starting with API 201, use *--api-version* if necessary).
 
 remove *increments* *--older-than* _time_ [*--size*] _repository_:: Remove the incremental backup information in the destination directory that has been around longer than the given time, or the oldest one if no time is provided.
 +
@@ -372,8 +372,7 @@ Even if disabled (the default), this information will still be available from th
 This option is only to be used if you encounter the issue of metadata mirrors with the same timestamp.
 In such cases, you may use this flag to first recover from the failed backup with something like
 
-  rdiff-backup --allow-duplicate-timestamps \
-               --check-destination-dir {targetdir}
+  rdiff-backup regress --allow-duplicate-timestamps {targetdir}
 +
 after which you will need to remove those old duplicate entries using the *remove increments* action.
 
@@ -464,7 +463,7 @@ So if the '[.code]``host_info``' is '[.code]``user@host.net``', then rdiff-backu
 Using *--remote-schema*, rdiff-backup can invoke an arbitrary command in order to open up a remote pipe.
 For instance,
 
- rdiff-backup backup --remote-schema 'cd /usr; {h}' \
+ rdiff-backup --remote-schema 'cd /usr; {h}' backup \
                      foo 'rdiff-backup server'::bar
 
 is basically equivalent to (but slower than)
@@ -486,7 +485,9 @@ For example, if you have rdiff-backup 2.1.5 and 2.2.1 installed in virtual envir
 The client will then use the correct version of rdiff-backup based on its own version '[.code]``x.y.z``'.
 You'll find more explanations in the *migration* file in the documentation.
 
-And finally, to include a literal '[.code]``%``' in the string specified by *--remote-schema*, quote it with another '[.code]``%``', as in '[.code]``%%``' (this is due to the compatibility with the deprecated host placeholder '[.code]``%s``', which you shouldn't use anymore).
+If you need to include a literal '[.code]``%``' in the string specified by *--remote-schema*, quote it with another '[.code]``%``', as in '[.code]``%%``' (this is due to the compatibility with the deprecated host placeholder '[.code]``%s``', which you shouldn't use anymore).
+
+And finally, if you need to include literal '[.code]``{ }``' (curly braces) in the the string specified by *--remote-schema*, quote them (both) by doubling each of them up, as in '[.code]``{{ foo=0; }}``'.
 
 Although ssh itself may be secure, using rdiff-backup in the default way presents some security risks.
 For instance if the server is run as root, then an attacker who compromised the client could then use rdiff-backup to overwrite arbitrary server files by "backing up" over them.
@@ -498,7 +499,7 @@ For more information, see the web page, the wiki, and the entries for those opti
 rdiff-backup has a number of file selection options.
 When rdiff-backup is run, it searches through the given source directory and backs up all the files matching the specified options.
 This selection system may appear complicated, but it is supposed to be flexible and easy-to-use.
-If you just want to learn the basics, first look at the selection examples in the *examples* file included in the package, or on the web at https://rdiff-backup.net/docs/examples.html.
+If you just want to learn the basics, first look at the selection examples in the *examples* file included in the package, or on the web at https://rdiff-backup.net/examples.html.
 
 rdiff-backup's selection system was originally inspired by *rsync*(1), but there are many differences.
 For instance, trailing backslashes have no special significance.
@@ -705,6 +706,10 @@ RDIFF_BACKUP_DEBUG=[_address_][:__port__]::
 set a non-default listening address and/or port (default is `127.0.0.1:4444`) for  rpdb.
 Valid values are _address_, _address:port_ or _:port_.
 
+RDIFF_BACKUP_API_VERSION={[_dictionary_]}::
+Overwrite the 'actual', 'default', 'max' and/or 'min' value of the API VERSION using a YAML object, e.g. `{actual: 201, default: 201}`.
+This environment variable is rather meant for development and test purposes to change the values without modifying the code, so use with care.
+
 == RETURN CODES
 
 The following return codes have not been fully implemented so test before you rely on them.
@@ -731,7 +736,7 @@ In doubt subscribe to and ask the mailing list:: https://lists.nongnu.org/mailma
 
 == SEE ALSO
 
-*python*(1), *rdiff*(1), *rsync*(1), *ssh*(1).
+*rdiff-backup-old*(1), *python*(1), *rdiff*(1), *rsync*(1), *ssh*(1).
 
 The main rdiff-backup web page is at https://rdiff-backup.net/.
 It has more documentation, links to the mailing list and source code.

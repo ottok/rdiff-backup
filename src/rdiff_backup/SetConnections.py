@@ -35,10 +35,6 @@ from rdiffbackup.utils import safestr
 # The first is None because it is the local connection.
 __conn_remote_cmds = [None]
 
-# keep a list of sub-processes running; we don't use it, it's only to avoid
-# "ResourceWarning: subprocess N is still running" from subprocess library
-_processes = []
-
 
 class SetConnectionsException(Exception):
     pass
@@ -72,6 +68,11 @@ def get_cmd_pairs(locations, remote_schema=None, ssh_compression=True,
         if Globals.get_api_version() > 200:  # compat200
             cmd_schema += b" server"
         else:
+            log.Log("Server will be called with deprecated command line "
+                    "interface to guarantee compatibility. It might lead to "
+                    "a deprecation warning from newer rdiff-backup versions. "
+                    "Use '--api-version 201' (or higher) to avoid it.",
+                    log.WARNING)
             cmd_schema += b" --server"
 
     if not locations:
@@ -279,8 +280,14 @@ def _fill_schema(host_info, cmd_schema):
     try:
         # for security reasons, we accept only specific format placeholders
         # h for host_info, Vx,Vy,Vz for version x.y.z
-        # and the host placeholder is mandatory
-        if ((re.findall(b"{[^}]*}", cmd_schema)
+        # and the host placeholder is mandatory;
+        # some shells allow use of curly braces for various purposes, so we
+        # must provide a way to allow the user to use them in their remote-
+        # schema: format() provides a ready-made way to do this with their
+        # escape mechanism of doubling-up the braces {{ }}, so our findall
+        # check must ignore the doubled-up ones in its validation check
+        # using a simple negative-lookbehind
+        if ((re.findall(b"(?<!{){[^{}]*}", cmd_schema)
              != re.findall(b"{h}|{V[xyz]}", cmd_schema))
                 or (b"{h}" not in cmd_schema
                     and b"%s" not in cmd_schema)):  # compat200
@@ -306,7 +313,6 @@ def _init_connection(remote_cmd):
     like global settings, its connection number, and verbosity.
 
     """
-    global _processes
     if not remote_cmd:
         return Globals.local_connection
 
@@ -329,12 +335,10 @@ def _init_connection(remote_cmd):
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE)
         (stdin, stdout) = (process.stdin, process.stdout)
-        # only to avoid resource warnings about subprocess still running
-        _processes.append(process)
     except OSError:
         (stdin, stdout) = (None, None)
     conn_number = len(Globals.connections)
-    conn = connection.PipeConnection(stdout, stdin, conn_number)
+    conn = connection.PipeConnection(stdout, stdin, conn_number, process)
 
     if not _validate_connection_version(conn, remote_cmd):
         return None
@@ -491,8 +495,12 @@ def _test_connection(conn_number, rp):
     # FIXME the tests don't sound right, the path given needs to pre-exist
     # on Windows but not on Linux? What are we exactly testing here?
     try:
-        assert conn.Globals.get('current_time') is None
-        assert type(conn.os.listdir(rp.path)) is list
+        remote_time = conn.Globals.get('current_time')
+        assert remote_time == Globals.current_time, (
+            "connection not returning current time {ct1} but {ct2}".format(
+                ct1=Globals.current_time, ct2=remote_time))
+        assert type(conn.os.listdir(rp.path)) is list, (
+            "connection not listing directory '{rp}'".format(rp=rp))
     except BaseException as exc:
         sys.stderr.write("- Server tests failed due to {exc}\n".format(exc=exc))
         return False

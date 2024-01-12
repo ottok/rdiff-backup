@@ -23,17 +23,15 @@ import sys
 from rdiff_backup import Globals, log
 from rdiffbackup import arguments, actions_mgr, actions
 
-try:
+if os.name == "nt":
     import msvcrt
-
-    # make sure line endings are kept under Windows like under Linux
-    msvcrt.setmode(sys.stdin.fileno(), os.O_BINARY)
-    msvcrt.setmode(sys.stdout.fileno(), os.O_BINARY)
-except ImportError:
-    pass
 
 
 def main():
+    if os.name == "nt":
+        # make sure line endings are kept under Windows like under Linux
+        msvcrt.setmode(sys.stdin.fileno(), os.O_BINARY)
+        msvcrt.setmode(sys.stdout.fileno(), os.O_BINARY)
     sys.exit(main_run(sys.argv[1:]))
 
 
@@ -83,6 +81,11 @@ def main_run(arglist, security_override=False):
 
     # now start for real, conn_act and action are the same object
     with action.connect() as conn_act:
+
+        if not conn_act.is_connection_ok():
+            log.Log("Action {ac} failed on step {st}".format(
+                ac=parsed_args.action, st="connect"), log.ERROR)
+            return conn_act.conn_status
 
         # For test purposes only, hence we allow ourselves to overwrite a
         # "private" variable

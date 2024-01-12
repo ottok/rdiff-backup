@@ -8,7 +8,6 @@
 # Distributions of rdiff-backup should include a copy of the GPL in a
 # file called COPYING.  The GPL is also available online at
 # https://www.gnu.org/copyleft/gpl.html.
-
 """
 This library allows to create a set of files (and directories), using a
 structure of dictionaries.
@@ -16,45 +15,56 @@ structure of dictionaries.
 The name of the files and directories in the base directory are used as keys
 in a dictionary of dictionaries.
 
-A directory has the type "dir" or a "subs" key to contain sub-directories or
-files.
+A directory has the type "dir/directory" or a "contents" key to contain sub-directories or files.
+A directory can also have the "rec" key, which is a dictionary of keys to apply by default to itself and all its children.
 
 Both directories and files can have the following keys:
-* a "mode" to define the chmod to apply
+* a "mode" to define the chmod to apply, differentiated as "dmode" resp. "fmode"
 
 Files can also have the following keys:
 * "content" which is written to the file.
 * "open" flag, "t" or "b" for the write mode to the file
+* "inode" to hardlink files together, the value is not important, it must just be unique within the fileset (it might not even be an integer).
+
+Then there are symlinks with type "link", and the "target" parameter, applied as-is.
 
 Example:
 {
-    "a_dir": {"subs": {"fileA": {"content": "initial"}, "fileB": {}}},
-    "empty_dir": {"type": "dir", "mode": 0o777},
+    "a_dir": {
+        "rec": {"fmode": 0o444, "content": "default content"},
+        "contents": {"fileA": {"content": "initial"}, "fileB": {}}
+    },
+    "empty_dir": {"type": "dir", "dmode": 0o777},
     "a_bin_file": {"content": b"some_binary_content", "open": "b"},
 }
+
+NOTE: the format is meant to be as similar as possible to `tree -J`, so that its output could be eventually used to re-create a file structure.
+
+TODO: fully support tree format with a list of dictionaries, instead of a dictionary of dictionaries, where the key is the filename.
 """
 
 import os
+import random
 import shutil
 import stat
-
-DEFAULT_DIR_MODE = 0o755
-DEFAULT_FILE_MODE = 0o644
-DEFAULT_FILE_OPEN = "t"  # or "b"
-DEFAULT_FILE_CONTENT = ""
+import string
+import sys
 
 
-def create_fileset(base_dir, structure):
+def create_fileset(base_dir, structure, recurse={}):
     """
     Create the file set as represented by the structure in the base directory
 
     base_dir can be path-like, str or bytes,
-    structure contains names as str
+    structure contains names as str pointing to further structures
+    recurse can be used to set settings in the whole hierarchy
     """
-    _create_directory(base_dir)
+    # we create a new inodes dictionary for each fileset
+    recurse["inodes"] = {}
+    _create_directory(SetPath(base_dir, {"type": "directory"}, recurse))
     for name in structure:
-        _create_fileset(os.path.join(os.fsdecode(base_dir), name),
-                        structure[name])
+        _multi_create_fileset(os.fsdecode(base_dir), name,
+                              structure[name], recurse)
 
 
 def remove_fileset(base_dir, structure):
@@ -63,20 +73,17 @@ def remove_fileset(base_dir, structure):
 
     The base directory itself isn't removed unless it's empty
     """
+    base_dir = os.fsdecode(base_dir)
     for name in structure:
-        fullname = os.path.join(os.fsdecode(base_dir), name)
         struct = structure[name]
-        try:
-            if struct.get("type") == "dir" or "subs" in struct:
-                shutil.rmtree(fullname)
-            else:
-                os.remove(fullname)
-        except FileNotFoundError:
-            pass  # if the file doesn't exist, we don't need to remove it
-        except IsADirectoryError:
-            shutil.rmtree(fullname)
-        except NotADirectoryError:
-            os.remove(fullname)
+        range_count = struct.get("range")
+        if range_count:
+            if isinstance(range_count, int):
+                range_count = [range_count]
+            for count in range(*range_count):
+                _delete_file_or_dir(base_dir, name.format(count), struct)
+        else:
+            _delete_file_or_dir(base_dir, name, struct)
 
     # at the end we try to remove the base directory, if it's empty
     try:
@@ -135,68 +142,286 @@ def compare_paths(path1, path2):
     return differences
 
 
-def _create_fileset(fullname, struct):
+class SetPath():
+    """
+    Holds a path's own settings and the recursive ones, so that they can be
+    transparently combined
+    """
+    defaults = {
+        "dmode": 0o755,
+        "fmode": 0o644,
+        "open": "t",
+        "content": "",
+    }
+    type_synonyms = {
+        "dir": "directory",
+        "symlink": "link",
+        "hardlink": "file",
+    }
+    path = ""
+    path_type = ""
+    values = {}
+    recurse = {}
+
+    @classmethod
+    def get_canonic_type(cls, path_type):
+        return cls.type_synonyms.get(path_type, path_type)
+
+    def __init__(self, path, values={}, recurse={}, new_rec={}):
+        """
+        Initiate the settings based on own values, recursive ones, and
+        additional new ones, to be combined into one recursive set of settings
+        """
+        self.path = path
+        path_type = values.get("type")
+        if path_type:
+            self.path_type = self.get_canonic_type(path_type)
+        elif "contents" in values:
+            self.path_type = "directory"
+        elif "target" in values:
+            self.path_type = "link"
+        else:
+            self.path_type = "file"
+        self.values = values
+        self.recurse = recurse.copy()
+        self.recurse.update(new_rec)
+        # the copy of recurse is shallow, so that the "inodes" dictionary is
+        # always the same throughout one fileset
+        if "inode" in values:
+            inode = values["inode"]
+            if inode in self.recurse["inodes"]:
+                self.values["target"] = self.recurse["inodes"][inode]
+            else:
+                self.recurse["inodes"][inode] = self
+
+    def __fspath__(self):
+        return self.path
+
+    def __repr__(self):
+        return str([self.path, self.path_type, self.values, self.recurse])
+
+    def get_type(self):
+        return self.path_type
+
+    def get_mode(self):
+        """
+        Get the file access rights according to file type and current settings
+        """
+        assert self.path_type in ["file", "directory"], (
+            "Type {pt} can't get a mode".format(pt=self.path_type))
+        generic = "mode"
+        if self.path_type == "file":
+            specific = "fmode"
+        elif self.path_type == "directory":
+            specific = "dmode"
+        default = self.defaults.get(specific)
+
+        mode = self.values.get(
+            specific, self.values.get(
+                generic, self.recurse.get(
+                    specific, self.recurse.get(
+                        generic, default))))
+
+        if isinstance(mode, int):
+            return mode
+        else:
+            return int(mode, base=8)
+
+    def set_times(self, is_symlink=False):
+        """
+        Set access and/or modification times of files according to their
+        parameters.
+
+        Returns None if nothing was changed, else a tuple of times modified
+        """
+        atime = self.get("atime")
+        mtime = self.get("mtime")
+        atime_ns = self.get("atime_ns")
+        mtime_ns = self.get("mtime_ns")
+        if atime_ns is None and atime is not None:
+            atime_ns = int(atime * 1_000_000_000)
+        if mtime_ns is None and mtime is not None:
+            mtime_ns = int(mtime * 1_000_000_000)
+        if atime_ns is None and mtime_ns is None:
+            return  # nothing to do
+        if atime_ns is None or mtime_ns is None:
+            lstat = os.lstat(self)
+            if atime_ns is None:
+                atime_ns = lstat.st_atime_ns
+            if mtime_ns is None:
+                mtime_ns = lstat.st_mtime_ns
+        if os.utime in os.supports_follow_symlinks:
+            os.utime(self, ns=(atime_ns, mtime_ns), follow_symlinks=False)
+        elif not is_symlink:
+            os.utime(self, ns=(atime_ns, mtime_ns))
+        return (atime_ns, mtime_ns)
+
+    def get(self, param):
+        """
+        Get the value of the given parameters across own values, recursive ones
+        and potential default value.
+        Returns None as last resort.
+        """
+        default = self.defaults.get(param)
+        return self.values.get(param, self.recurse.get(param, default))
+
+    def is_hardlinked(self):
+        return self.get_type() != "link" and "target" in self.values
+
+
+# --- INTERNAL FUNCTIONS ---
+
+
+def _multi_create_fileset(base_dir, name, structure, recurse):
+    """
+    Wrapper for _create_fileset to be able to create multiple filesets
+    following a range of integers
+    """
+    range_count = structure.get("range")
+    if range_count:
+        if isinstance(range_count, int):
+            range_count = [range_count]
+        for count in range(*range_count):
+            _create_fileset(os.path.join(base_dir, name.format(count)),
+                            structure, recurse)
+    else:
+        _create_fileset(os.path.join(base_dir, name), structure, recurse)
+
+
+def _create_fileset(fullname, struct, recurse={}):
     """
     Recursive part of the fileset creation
     """
-    if struct.get("type") == "dir" or "subs" in struct:
-        _create_directory(fullname, settings=struct, always_delete=True)
-        for name in struct.get("subs", {}):
-            _create_fileset(os.path.join(fullname, name), struct["subs"][name])
-    elif (struct.get("type") == "hardlink"
-            or ("link" in struct and "type" not in struct)):
-        _create_link(fullname, settings=struct)
-    elif struct.get("type") == "symlink":  # a link is hard by default
-        _create_link(fullname, settings=struct, linker=os.symlink)
+    set_path = SetPath(fullname, struct, recurse, struct.get("rec", {}))
+    if set_path.get_type() == "directory":
+        _create_directory(set_path, always_delete=True)
+        for name in struct.get("contents", {}):
+            _multi_create_fileset(fullname, name, struct["contents"][name],
+                                  set_path.recurse)
+        _finish_directory(set_path)
     else:
-        _create_file(fullname, settings=struct)
-    # other types of items are ignored for now
+        if set_path.is_hardlinked():
+            _create_hardlink(set_path)
+        elif set_path.get_type() == "link":  # symlink
+            _create_symlink(set_path)
+        else:  # this must be a file
+            _create_file(set_path)
+        # other types of items are ignored for now
 
 
-def _create_directory(dir_name, settings={}, always_delete=False):
+def _create_directory(set_path, always_delete=False):
     """
     Create a directory according to settings.
 
-    The directory is created according to "mode". It is first destroyed if
-    requested. It is currently the recommended approach to make sure the
+    It is first destroyed if requested.
+    It is currently the recommended approach to make sure the
     structure is exactly as expected (a delta mechanism could be added).
     """
-    if os.path.exists(dir_name):
-        if always_delete or not os.path.isdir(dir_name):
-            shutil.rmtree(dir_name)
+    if os.path.exists(set_path):
+        if always_delete or not os.path.isdir(set_path):
+            _rmtree(set_path)
         else:
             return
-    os.makedirs(dir_name, mode=settings.get("mode", DEFAULT_DIR_MODE))
+    os.makedirs(set_path)
 
 
-def _create_file(file_name, settings, always_delete=False):
+def _finish_directory(set_path):
     """
-    Creates a file according to settings
+    The directory is chmod according to "mode", _after_ the contained elements
+    have been created.
+    """
+    os.chmod(set_path, set_path.get_mode())
+    set_path.set_times()
+
+
+def _create_file(set_path, always_delete=False):
+    """
+    Creates a file according to set_path
 
     The file will have the access rights according to "mode", and the "content"
     from the corresponding key, written in binary mode if "open" is set to "b",
     else "t".
     """
-    if os.path.exists(file_name):
-        if always_delete or not os.path.isfile(file_name):
-            shutil.rmtree(file_name)
-    with open(file_name, "w" + settings.get("open", DEFAULT_FILE_OPEN)) as fd:
-        fd.write(settings.get("content", DEFAULT_FILE_CONTENT))
-    os.chmod(file_name, mode=settings.get("mode", DEFAULT_FILE_MODE))
+    if os.path.exists(set_path):
+        if always_delete or not os.path.isfile(set_path):
+            _rmtree(set_path)
+    open_mode = set_path.get("open")
+    with open(set_path, "w" + open_mode) as fd:
+        size = set_path.get("size")
+        content = set_path.get("content")
+        if size is None:
+            fd.write(set_path.get("content"))
+        elif size == 0:
+            pass  # no need to write anything
+        elif content:
+            times = size // len(content)
+            remainder = size % len(content)
+            while times > 0:
+                fd.write(content)
+                times -= 1
+            if remainder:
+                fd.write(content[:remainder])
+        else:
+            if "b" in open_mode:
+                if sys.version_info.major >= 3 and sys.version_info.minor >= 9:
+                    fd.write(random.randbytes(size))
+                else:
+                    fd.write(bytes(random.choices(range(256), k=size)))
+            else:  # random text data
+                fd.write("".join(random.choices(string.printable, k=size)))
+    os.chmod(set_path, set_path.get_mode())
+    set_path.set_times()
 
 
-def _create_link(link_name, settings, linker=os.link):
+def _create_hardlink(set_path):
     """
-    Creates a link according to settings, hard or soft depending on function
+    Creates a hardlink according to set_path
     """
-    link = settings["link"]
-    if os.path.isabs(link):
-        linker(link, link_name)
-    else:
-        currdir = os.getcwd()
-        os.chdir(os.path.dirname(link_name))
-        linker(link, link_name)
-        os.chdir(currdir)
+    os.sync()
+    os.link(set_path.get("target"), set_path)
+    set_path.set_times()  # beware that last hardlink wins!
+
+
+def _create_symlink(set_path):
+    """
+    Creates a symlink according to set_path
+    """
+    os.symlink(set_path.get("target"), set_path)
+    set_path.set_times(is_symlink=True)
+
+
+def _delete_file_or_dir(base_dir, name, struct):
+    """
+    Remove a file or directory in a given base directory
+    """
+    fullname = os.path.join(base_dir, name)
+    set_path = SetPath(fullname, struct)
+    try:
+        if set_path.get_type() == "directory":
+            _rmtree(fullname)
+        else:
+            os.remove(fullname)
+    except FileNotFoundError:
+        pass  # if the file doesn't exist, we don't need to remove it
+    except IsADirectoryError:
+        _rmtree(fullname)
+    except NotADirectoryError:
+        os.remove(fullname)
+
+
+def _rmtree(set_path):
+    """
+    Remove a complete tree making sure that access rights don't get in the way
+    """
+    for dir_name, dirs, files in os.walk(set_path):  # topdown
+        mode = os.stat(dir_name).st_mode
+        os.chmod(dir_name, mode | 0o222)
+        # Windows can't remove read-only files
+        for file_name in files:
+            file = os.path.join(dir_name, file_name)
+            mode = os.stat(file).st_mode
+            os.chmod(file, mode | 0o222)
+    shutil.rmtree(set_path)
 
 
 def _compare_files(file1, stat1, file2, stat2):
@@ -276,3 +501,79 @@ def _compare_files(file1, stat1, file2, stat2):
                 pa1=file1, pa2=file2, go1=stat1.st_uid, go2=stat2.st_uid))
 
     return differences
+
+
+if __name__ == "__main__":
+    # just doing some minimal test when called as script
+    # requires `tree` to work!
+    import subprocess
+    import tempfile
+
+    base_temp_dir = tempfile.mkdtemp(".d", "fileset_")
+    structure = {
+        "a_dir": {
+            "rec": {"fmode": 0o444, "content": "default content"},
+            "contents": {
+                "fileA": {"content": "initial", "inode": 0, "mtime": 10_000},
+                "fileB": {"mode": "0544", "inode": "B", "mtime": 15_000},
+                "fileC": {"target": "../a_bin_file", "mtime": 20_000},
+                "fileD": {"inode": "B", "mtime": 30_000},  # last hardlink wins!
+                "fileE": {"size": 200},
+            },
+            "atime": 50_000, "mtime": 50_001,  # tree doesn't show atime
+        },
+        "empty_dir": {"type": "dir", "dmode": 0o777},
+        "a_bin_file": {"content": b"some_binary_content", "size": 64, "open": "b"},
+        "multi_dir_{:02}": {
+            "range": [1, 20, 7],
+            "contents": {
+                "multi_file_{}": {"size": 10, "range": 5},
+            },
+        },
+    }
+
+    print("base directory: {bd}".format(bd=base_temp_dir))
+    create_fileset(base_temp_dir, structure)
+    subprocess.call(["tree", "-aDJps", "--inodes", "--timefmt", "%s",
+                     base_temp_dir])
+    remove_fileset(base_temp_dir, structure)
+
+"""
+$ tree -aDJps --inodes --timefmt %s /tmp/fileset_0e2bgq6t.d
+[
+  {"type":"directory","name":"/tmp/fileset_0e2bgq6t.d","inode":0,"mode":"0700","prot":"drwx------","size":160,"time":"1677348476","contents":[
+    {"type":"file","name":"a_bin_file","inode":1407,"mode":"0644","prot":"-rw-r--r--","size":64,"time":"1677348476"},
+    {"type":"directory","name":"a_dir","inode":1401,"mode":"0755","prot":"drwxr-xr-x","size":140,"time":"50001","contents":[
+      {"type":"file","name":"fileA","inode":1402,"mode":"0444","prot":"-r--r--r--","size":7,"time":"10000"},
+      {"type":"file","name":"fileB","inode":1403,"mode":"0544","prot":"-r-xr--r--","size":15,"time":"30000"},
+      {"type":"link","name":"fileC","target":"../a_bin_file","inode":1407,"mode":"0777","prot":"lrwxrwxrwx","size":13,"time":"20000"},
+      {"type":"file","name":"fileD","inode":1403,"mode":"0544","prot":"-r-xr--r--","size":15,"time":"30000"},
+      {"type":"file","name":"fileE","inode":1405,"mode":"0444","prot":"-r--r--r--","size":200,"time":"1677348476"}
+    ]},
+    {"type":"directory","name":"empty_dir","inode":1406,"mode":"0777","prot":"drwxrwxrwx","size":40,"time":"1677348476"},
+    {"type":"directory","name":"multi_dir_01","inode":1408,"mode":"0755","prot":"drwxr-xr-x","size":140,"time":"1677348476","contents":[
+      {"type":"file","name":"multi_file_0","inode":1409,"mode":"0644","prot":"-rw-r--r--","size":10,"time":"1677348476"},
+      {"type":"file","name":"multi_file_1","inode":1410,"mode":"0644","prot":"-rw-r--r--","size":10,"time":"1677348476"},
+      {"type":"file","name":"multi_file_2","inode":1411,"mode":"0644","prot":"-rw-r--r--","size":10,"time":"1677348476"},
+      {"type":"file","name":"multi_file_3","inode":1412,"mode":"0644","prot":"-rw-r--r--","size":10,"time":"1677348476"},
+      {"type":"file","name":"multi_file_4","inode":1413,"mode":"0644","prot":"-rw-r--r--","size":10,"time":"1677348476"}
+    ]},
+    {"type":"directory","name":"multi_dir_08","inode":1414,"mode":"0755","prot":"drwxr-xr-x","size":140,"time":"1677348476","contents":[
+      {"type":"file","name":"multi_file_0","inode":1415,"mode":"0644","prot":"-rw-r--r--","size":10,"time":"1677348476"},
+      {"type":"file","name":"multi_file_1","inode":1416,"mode":"0644","prot":"-rw-r--r--","size":10,"time":"1677348476"},
+      {"type":"file","name":"multi_file_2","inode":1417,"mode":"0644","prot":"-rw-r--r--","size":10,"time":"1677348476"},
+      {"type":"file","name":"multi_file_3","inode":1418,"mode":"0644","prot":"-rw-r--r--","size":10,"time":"1677348476"},
+      {"type":"file","name":"multi_file_4","inode":1419,"mode":"0644","prot":"-rw-r--r--","size":10,"time":"1677348476"}
+    ]},
+    {"type":"directory","name":"multi_dir_15","inode":1420,"mode":"0755","prot":"drwxr-xr-x","size":140,"time":"1677348476","contents":[
+      {"type":"file","name":"multi_file_0","inode":1421,"mode":"0644","prot":"-rw-r--r--","size":10,"time":"1677348476"},
+      {"type":"file","name":"multi_file_1","inode":1422,"mode":"0644","prot":"-rw-r--r--","size":10,"time":"1677348476"},
+      {"type":"file","name":"multi_file_2","inode":1423,"mode":"0644","prot":"-rw-r--r--","size":10,"time":"1677348476"},
+      {"type":"file","name":"multi_file_3","inode":1424,"mode":"0644","prot":"-rw-r--r--","size":10,"time":"1677348476"},
+      {"type":"file","name":"multi_file_4","inode":1425,"mode":"0644","prot":"-rw-r--r--","size":10,"time":"1677348476"}
+    ]}
+  ]}
+,
+  {"type":"report","directories":6,"files":21}
+]
+"""

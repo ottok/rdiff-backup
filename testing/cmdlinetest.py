@@ -3,9 +3,15 @@ import os
 import re
 import time
 import pathlib
-from commontest import rdiff_backup, Myrm, compare_recursive, \
+from commontest import (
+    rdiff_backup, Myrm, compare_recursive,
     old_test_dir, abs_test_dir, get_increment_rp, xcopytree
+)
+import commontest as comtst
+import fileset
 from rdiff_backup import Globals, log, rpath, robust, FilenameMapping, Time, selection
+from rdiffbackup.locations.map import filenames as map_filenames
+
 """Regression tests"""
 
 Globals.exclude_mirror_regexps = [re.compile(b".*/rdiff-backup-data")]
@@ -186,9 +192,13 @@ class PathSetter(unittest.TestCase):
         within a given directory."""
 
         if quoted:
-            FilenameMapping.set_init_quote_vals()
-            dirrp = FilenameMapping.QuotedRPath(Globals.local_connection,
-                                                directory)
+            if Globals.get_api_version() < 201:  # compat200
+                FilenameMapping.set_init_quote_vals()
+                dirrp = FilenameMapping.QuotedRPath(Globals.local_connection,
+                                                    directory)
+            else:
+                dirrp = map_filenames.QuotedRPath(Globals.local_connection,
+                                                  directory)
         else:
             dirrp = rpath.RPath(Globals.local_connection, directory)
         incbasenames = [
@@ -203,18 +213,26 @@ class PathSetter(unittest.TestCase):
 
 
 class Final(PathSetter):
+    @unittest.skipIf(Globals.get_api_version() > 200,  # compat200
+                     "Higher API version than 200 not supported")
     def testLocal(self):
         """Run test sequence everything local"""
         self.runtest(True, True)
 
+    @unittest.skipIf(Globals.get_api_version() > 200,  # compat200
+                     "Higher API version than 200 not supported")
     def testRemoteAll(self):
         """Run test sequence everything remote"""
         self.runtest(False, False)
 
+    @unittest.skipIf(Globals.get_api_version() > 200,  # compat200
+                     "Higher API version than 200 not supported")
     def testRemoteSource(self):
         """Run test sequence when remote side is source"""
         self.runtest(False, True)
 
+    @unittest.skipIf(Globals.get_api_version() > 200,  # compat200
+                     "Higher API version than 200 not supported")
     def testRemoteDest(self):
         """Run test sequence when remote side is destination"""
         self.runtest(True, False)
@@ -805,12 +823,30 @@ class FinalBugs(PathSetter):
 
         """
         self.delete_tmpdirs()
-        bigrp = Local.get_src_local_rp('bigdir')
+
+        # create the bigdir on the fly
+        bigdir_path = os.path.join(comtst.abs_test_dir, b"cmd_bigdir")
+        bigrp = rpath.RPath(Globals.local_connection, bigdir_path)
+        bigdir_struct = {
+            "subdir{}": {
+                "range": 4, "contents": {
+                    "subdir{}": {
+                        "range": 50, "contents": {
+                            "file{}": {"range": 50, "size": 1024}
+                        }
+                    }
+                }
+            }
+        }
+        fileset.create_fileset(bigdir_path, bigdir_struct)
+
         rdiff_backup(True, True, bigrp.path, Local.rpout.path)
         rp = bigrp.append('subdir3', 'subdir49', 'file49')
         self.assertTrue(rp.isreg())
         rp.touch()
         rdiff_backup(True, True, bigrp.path, Local.rpout.path)
+
+        fileset.remove_fileset(bigdir_path, bigdir_struct)
 
 
 if __name__ == "__main__":

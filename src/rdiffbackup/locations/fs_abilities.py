@@ -191,7 +191,11 @@ class FSAbilities:
         """
         Set self.hardlinks to true if hard linked files can be created
         """
-        if not Globals.preserve_hardlinks:
+        if os.name == "nt":
+            log.Log("Hardlinks disabled on Windows", log.INFO)
+            self.hardlinks = None
+            return
+        elif not Globals.preserve_hardlinks:
             log.Log("Hard linking test skipped as rdiff-backup was started "
                     "with --no-hard-links option", log.INFO)
             self.hardlinks = None
@@ -364,7 +368,7 @@ class FSAbilities:
             files_list = robust.listrp(subdir)
             for filename in files_list:
                 file_rp = subdir.append(filename)
-                if filename != filename.swapcase():
+                if file_rp.lstat() and filename != filename.swapcase():
                     return (subdir, files_list, filename)
                 elif file_rp.isdir():
                     subsearch = find_letter(file_rp)
@@ -377,7 +381,6 @@ class FSAbilities:
             Return 1 if filename shows that file system is case sensitive,
             else 0
             """
-            # TODO move check + lstat to find_letter
             swapped = filename.swapcase()
             if swapped in dirlist:
                 return True
@@ -1059,10 +1062,13 @@ class Repo2DirSetGlobals(SetGlobals):
         """
         Set chars_to_quote from rdiff-backup-data dir
         """
-        if Globals.chars_to_quote is not None:
-            return  # already overridden
+        if Globals.chars_to_quote is None:
+            ctq = repo.get_chars_to_quote()
+        else:
+            # value has been overwritten from the command line but still needs
+            # to be set across the connections and (un)regexp defined
+            ctq = Globals.chars_to_quote
 
-        ctq = repo.get_chars_to_quote()
         if ctq is not None:
             regexp, unregexp = map_filenames.get_quoting_regexps(
                 ctq, Globals.quoting_char)
