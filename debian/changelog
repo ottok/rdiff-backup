@@ -1,3 +1,11 @@
+rdiff-backup (2.2.6-1) unstable; urgency=medium
+
+  * New upstream version 2.2.6
+  * Make version pattern more specific in debian/watch
+  * Use new upstream merged branch structure in gbp.conf
+
+ -- Otto Kekäläinen <otto@debian.org>  Fri, 12 Jan 2024 14:05:39 -0800
+
 rdiff-backup (2.2.2-1) unstable; urgency=medium
 
   * New upstream version 2.2.2
