@@ -1,6 +1,8 @@
 rdiff-backup (2.2.6-1) unstable; urgency=medium
 
   * New upstream version 2.2.6
+    - Includes fix for cross-version issue with restrict_path
+      (Closes: #1035725)
   * Make version pattern more specific in debian/watch
   * Use new upstream merged branch structure in gbp.conf
 
