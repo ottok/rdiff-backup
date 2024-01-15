@@ -1,0 +1,1 @@
+rm_conffile /etc/bash_completion.d/rdiff-backup 1.2.8-8~ rdiff-backup
