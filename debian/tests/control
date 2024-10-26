@@ -1,6 +1,6 @@
 Tests: smoke
 Depends: rdiff-backup
-Restrictions: allow-stderr
+Restrictions: allow-stderr, superficial
 
 Tests: version
 Depends: @
