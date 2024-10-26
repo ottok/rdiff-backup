@@ -1,9 +1,13 @@
 rdiff-backup (2.2.6-2) UNRELEASED; urgency=medium
 
+  [ Sébastien Villemot ]
   * Properly clean obsolete bash completion conffile on upgrade
     (Closes: #988164)
 
- -- Sébastien Villemot <sebastien@debian.org>  Mon, 15 Jan 2024 16:26:30 +0100
+  [ Henrique F. Simoes ]
+  * Extract version test as new test suite
+
+ -- Henrique F. Simoes <henriquesimoes@riseup.net>  Sun, 10 Nov 2024 23:25:07 -0300
 
 rdiff-backup (2.2.6-1) unstable; urgency=medium
 

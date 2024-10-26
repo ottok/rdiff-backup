@@ -1,0 +1,11 @@
+#!/bin/sh
+
+set -ex
+
+if rdiff-backup --version | grep -q 'DEV'
+then
+  echo "Error: Version is 'DEV'"
+  exit 1
+else
+  echo "Version test passed"
+fi

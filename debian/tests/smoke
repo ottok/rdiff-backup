@@ -16,11 +16,3 @@ else
   echo "Error: Basic smoke test failed, rdiff-backup might not even run"
   exit 1
 fi
-
-if rdiff-backup --version | grep -q 'DEV'
-then
-  echo "Error: Version is 'DEV'"
-  exit 1
-else
-  echo "Version test passed"
-fi
