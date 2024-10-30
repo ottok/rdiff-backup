@@ -9,3 +9,7 @@ Restrictions: allow-stderr
 Tests: unit
 Depends: @, python3-pytest, rdiff, procps
 Restrictions: allow-stderr
+
+Tests: files
+Depends: @, wget, ca-certificates
+Restrictions: isolation-machine, needs-root, needs-internet, allow-stderr

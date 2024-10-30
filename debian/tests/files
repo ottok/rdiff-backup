@@ -1,0 +1,61 @@
+#!/bin/sh
+
+set -eux
+
+export RDIFF_TEST_UID=1000
+
+if id $RDIFF_TEST_UID &> /dev/null; then
+    user=$(id -un $RDIFF_TEST_UID)
+    group=$(id -gn $RDIFF_TEST_UID)
+else
+    user=test
+    group=$user
+    useradd --uid $RDIFF_TEST_UID --user-group $user
+fi
+
+export RDIFF_TEST_USER=$user
+export RDIFF_TEST_GROUP=$group
+
+# Download test files and set them up accordingly
+wget -qP $AUTOPKGTEST_TMP \
+    https://raw.githubusercontent.com/rdiff-backup/rdiff-backup-filesrepo/d85cf80b6c1ab1db89401f65d8a4600996c335eb/rdiff-backup_testfiles.tar
+
+# Tests expect files to be available in the parent directory under
+# rdiff-backup_testfiles directory
+tar -xvf $AUTOPKGTEST_TMP/rdiff-backup_testfiles.tar \
+    --owner=$RDIFF_TEST_USER:$RDIFF_TEST_UID \
+    --group=$RDIFF_TEST_GROUP \
+    -C ..
+
+# Setup test environment
+python3 testing/commontest.py
+
+tests="
+backuptest.py
+cmdlinetest.py
+comparetest.py
+connectiontest.py
+FilenameMappingtest.py
+hardlinktest.py
+incrementtest.py
+killtest.py
+longnametest.py
+metadatatest.py
+rdiffbackupdeletetest.py
+rdifftest.py
+regresstest.py
+robusttest.py
+roottest.py
+rpathtest.py
+securitytest.py
+selectiontest.py
+statisticstest.py
+"
+
+for test in $tests; do
+    python3 testing/$test
+done
+
+testing/makerestoretest3
+
+python3 testing/restoretest.py

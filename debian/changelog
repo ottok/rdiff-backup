@@ -7,7 +7,7 @@ rdiff-backup (2.2.6-2) UNRELEASED; urgency=medium
   [ Henrique F. Simoes ]
   * Extract version test as new test suite
   * Mark smoke test as superficial (Closes: #974526)
-  * Run upstream unit tests with autopkgtest
+  * Run upstream unit and system tests with autopkgtest
 
  -- Henrique F. Simoes <henriquesimoes@riseup.net>  Sun, 10 Nov 2024 23:25:07 -0300
 
