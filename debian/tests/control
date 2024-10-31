@@ -5,3 +5,7 @@ Restrictions: allow-stderr, superficial
 Tests: version
 Depends: @
 Restrictions: allow-stderr
+
+Tests: unit
+Depends: @, python3-pytest, procps
+Restrictions: allow-stderr

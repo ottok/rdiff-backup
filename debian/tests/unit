@@ -1,0 +1,8 @@
+#!/bin/sh
+
+set -ex
+
+# Setup test environment
+python3 testing/commontest.py
+
+python3 -m pytest testing/*_test.py
