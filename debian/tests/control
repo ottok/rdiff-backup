@@ -7,5 +7,5 @@ Depends: @
 Restrictions: allow-stderr
 
 Tests: unit
-Depends: @, python3-pytest, procps
+Depends: @, python3-pytest, rdiff, procps
 Restrictions: allow-stderr

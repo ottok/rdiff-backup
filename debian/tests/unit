@@ -5,4 +5,16 @@ set -ex
 # Setup test environment
 python3 testing/commontest.py
 
-python3 -m pytest testing/*_test.py
+python3 -m pytest \
+    testing/*_test.py \
+    testing/ctest.py \
+    testing/errorsrecovertest.py \
+    testing/iterfiletest.py \
+    testing/librsynctest.py \
+    testing/rorpitertest.py \
+    testing/rdb_arguments.py \
+    testing/setconnectionstest.py \
+    testing/timetest.py \
+    testing/user_grouptest.py
+
+python3 testing/hashtest.py
