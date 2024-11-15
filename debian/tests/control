@@ -13,3 +13,7 @@ Restrictions: allow-stderr
 Tests: files
 Depends: @, wget, ca-certificates
 Restrictions: isolation-machine, needs-root, needs-internet, allow-stderr
+
+Tests: fs
+Depends: @, python3-pylibacl, python3-pyxattr
+Restrictions: allow-stderr, flaky

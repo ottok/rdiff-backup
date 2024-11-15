@@ -1,0 +1,10 @@
+#!/bin/sh
+
+set -ex
+
+# Setup test environment
+python3 testing/commontest.py
+
+for test in fs_abilitiestest.py eas_aclstest.py; do
+    python3 testing/$test
+done
