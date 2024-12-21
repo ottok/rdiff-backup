@@ -2,29 +2,35 @@
 
 set -eux
 
+# Address Shellcheck undefined variable warning (SC2154) by defining a fall-back
+# value in case this script was ever called by something that hadn't defined it
+AUTOPKGTEST_TMP="${AUTOPKGTEST_TMP:-'/tmp'}"
+
 export RDIFF_TEST_UID=1000
 
-if id $RDIFF_TEST_UID &> /dev/null; then
-    user=$(id -un $RDIFF_TEST_UID)
-    group=$(id -gn $RDIFF_TEST_UID)
+if id "${RDIFF_TEST_UID}" 2>&1 /dev/null
+then
+    user=$(id -un "${RDIFF_TEST_UID}")
+    group=$(id -gn "${RDIFF_TEST_UID}")
 else
-    user=test
-    group=$user
-    useradd --uid $RDIFF_TEST_UID --user-group $user
+    user="test"
+    group=${user}
+    useradd --uid "${RDIFF_TEST_UID}" --user-group "${user}"
 fi
 
-export RDIFF_TEST_USER=$user
-export RDIFF_TEST_GROUP=$group
+export RDIFF_TEST_USER="${user}"
+export RDIFF_TEST_GROUP="${group}"
+
 
 # Download test files and set them up accordingly
-wget -qP $AUTOPKGTEST_TMP \
+wget -qP "${AUTOPKGTEST_TMP}" \
     https://raw.githubusercontent.com/rdiff-backup/rdiff-backup-filesrepo/d85cf80b6c1ab1db89401f65d8a4600996c335eb/rdiff-backup_testfiles.tar
 
 # Tests expect files to be available in the parent directory under
 # rdiff-backup_testfiles directory
-tar -xvf $AUTOPKGTEST_TMP/rdiff-backup_testfiles.tar \
-    --owner=$RDIFF_TEST_USER:$RDIFF_TEST_UID \
-    --group=$RDIFF_TEST_GROUP \
+tar -xvf "${AUTOPKGTEST_TMP}/rdiff-backup_testfiles.tar" \
+    --owner="${RDIFF_TEST_USER}":"${RDIFF_TEST_UID}" \
+    --group="${RDIFF_TEST_GROUP}" \
     -C ..
 
 # Setup test environment
@@ -52,8 +58,9 @@ selectiontest.py
 statisticstest.py
 "
 
-for test in $tests; do
-    python3 testing/$test
+for test in ${tests}
+do
+    python3 "testing/${test}"
 done
 
 testing/makerestoretest3
