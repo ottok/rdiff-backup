@@ -15,24 +15,23 @@ run them with `--verbose` and read the respective man pages for details.
 To get the Debian packaging source code and have the upstream remote alongside
 it, simply run:
 
-    gbp clone vcsgit:rdiff-backup --add-upstream-vcs
+    gbp clone --add-upstream-vcs vcs-git:rdiff-backup
 
-Using the `vcsgit:`prefix will automatically resolve the git repository
+Alternatively, run this to define precisely one upstream branch to be tracked:
+
+    gbp clone vcs-git:rdiff-backup \
+      --postclone="git remote add -t master -f upstreamvcs https://github.com/rdiff-backup/rdiff-backup.git"
+
+Using the `vcs-git:`prefix will automatically resolve the git repository
 location, which for most packages is on salsa.debian.org. To build the package
 one needs all three Debian branches (`debian/latest`, `upstream/latest`and
 `pristine-tar`). Using `gbp clone` and `gbp pull` ensures all three branches are
 automatically fetched.
 
 The command above also automatically adds the upstream repository as an extra
-remote called `upstreamvcs`, and fetches the latest upstream `master` branch
-commits and tags. The upstream development branch is not a requirement to build
-the Debian package, but is recommended for making collaboration with upstream
-easy.
-
-On older git-buildpackage versions the `--add-upstream-vcs` might not yet work,
-but you can achieve the same with manually running:
-
-    git remote add -t master -f upstreamvcs https://github.com/rdiff-backup/rdiff-backup.git
+remote, and fetches the latest upstream `master` branch commits and tags. The
+upstream development branch is not a requirement to build the Debian package,
+but is recommended for making collaboration with upstream easy.
 
 The repository structure and use of `gbp pq` makes it easy to cherry-pick
 commits between upstream and downstream Debian, ensuring improvements downstream
@@ -44,11 +43,11 @@ in Debian and upstream in the original project are shared frictionlessly.
 If you have an existing local repository created in this way, you can update it
 by simply running:
 
-    gbp pull --verbose
+    gbp pull
 
-To also get the upstream remote updated run:
+The above does not pull the upstreamvcs remote, so additionally run:
 
-    git pull --verbose --all
+    git pull --all --verbose
 
 The recommended tool to inspect what branches and tags you have and what their
 state is on various remotes is:
@@ -67,11 +66,15 @@ origin. In your fork, note the git SSH address, e.g.
 
     git remote add otto git@salsa.debian.org:otto/rdiff-backup.git
 
+Alternatively you can do this fully from the command line with:
+
+    salsa fork debian/rdiff-backup --verbose
+
 Do your code changes, commit and push to your repository:
 
     git checkout -b bugfix/123456-fix-something
     git commit # or `git citool`
-    git push --set-upstream otto bugfix/123456-fix-something
+    git push --set-upstream otto
 
 If made further modifications, and need to update your submission, run:
 
@@ -90,8 +93,8 @@ same change. Just submit the change for the `debian/latest` branch, and the
 maintainer will cherry-pick it to other branches as needed.
 
 The Debian packaging repository will only accept changes in the `debian/`
-subdirectory. Any fix for upstream code should be contributed directly to
-upstream.
+subdirectory. Any fix for upstream code should be ideally contributed directly to
+upstream and carried in Debian alone only in special cases.
 
 
 ## Adding a patch to the Debian packaging
@@ -103,36 +106,29 @@ code must be done as a patch in the `debian/patches/` subdirectory, which is
 then applied on upstream source code at build-time.
 
 Instead of manually fiddling with patch files, the recommended way to update
-them is using `gbp pq`. Start by deleting any remnants of an old temporary patch
-queue branch, and import latest `debian/patches` contents and switch to a
-temporary patches-applied branch by running:
+them is using `gbp pq`. Start by switching to the temporary patches-applied
+branch by running:
 
-    gbp pq drop && gbp pq import
+    gbp pq switch --force
     # Make changes, build, test
-    git commit -a --amend # or `git citool --amend`
+    git commit --all --amend # or `git citool --amend`
 
 If your terminal prompt shows the git branch, you will see it change from e.g.
-`debian/latest` to `patch-queue/debian/latest`. You can do whatever modification
-you want on _this patches-applied branch_, such as add commits, cherry-pick,
-rebase or whatever. Just keep in mind that for each commit you will eventually
-have a file in `debian/patches` in the final Debian packaging sources. There is
-no need to switch back to the "real" branch as you can build and test that
-everything works on this same branch effortlessly.
+`debian/latest` to `patch-queue/debian/latest`. On this branch do whatever
+modification you want. You may also use `git cherry-pick -x` to pick upstream
+commits, and have their origin automatically annotated.
 
-Only when finally done, convert the patch-queue commits back to a correctly
-formatted patch file by running:
+While still on this branch, build the sources and Debian package and test that
+everything works. When done, convert the commit to a correctly formatted
+patch file by running:
 
-    gbp pq export
-    git commit -a --amend # or `git citool --amend`
+    gbp pq export --drop --commit
+    git commit --amend # or `git citool --amend` to write actual details
 
 If your terminal prompt shows the git branch, you will see it have changed back
 to `debian/latest`. The updates you committed in `debian/patches/...` can be
 sent as a Merge Request on Salsa to the Debian package. The commit done on the
 `patch-queue/debian/latest` can be sent upstream as-is.
-
-Once done, discard the temporary branch with:
-
-    gbp pq drop
 
 
 ## Contributing upstream
@@ -148,37 +144,46 @@ push them to your GitHub fork and open a Pull Request on the upstream
 repository.
 
 
-## Importing a new upstream release
+## Download upstream release tarball, and import using both git tag and tarball
 
 To check for new upstream releases run:
 
-    gbp pq drop && gbp pq import
-    # Note branch name where the temporary patch-queue will be waiting
-    git fetch --verbose upstream master
-    # Note latest tag, e.g. 5.6
+    git fetch --verbose upstreamvcs
+    # Note latest release tag, e.g. v2.2.6
+    # Download upstream release tarball, and merge using both git tag and tarball
     gbp import-orig --uscan
     gbp dch --distribution=UNRELEASED \
-      --commit --commit-msg="Update changelog and refresh patches after %(upstreamversion)s import" \
+      --commit --commit-msg="Update changelog and refresh patches after %(version)s import" \
       -- debian
-    gbp pq rebase # or manually switch to patch-queue branch and use regular `git rebase`
-    gbp pq export
-    git commit -a --amend # or `git citool --amend`
+    # Add 'New upstream version' to changelog if it didn't go there automatically
+    # Import latest debian/patches on previous version so it can be rebased on latest
+    gbp pq import --force --time-machine=10
+    git rebase -i debian/latest
+    gbp pq export --drop
+    git commit --all --amend # or `git citool --amend` to write actual details
+    # Note: remember to manually strip '1:' and '-1' from commit message title as
+    # the '%(version)s' output is the Debian version and not upstream version!
 
 If the upstream version is not detected correctly, you can pass to `gbp dch` the
-extra parameter `--new-version=5.6`.
+extra parameter `--new-version=2.2.6`.
 
 If rebasing the patch queue causes merge conflicts, run `git mergetool` to
 visually resolve them. You can also browse the upstream changes on a particular
 file easily with `gitk path/to/file`.
 
-When adding DEP3 metadata fields to patches, put them as the first lines in the
-git commit message on the `pq` branch, or alternatively edit the
-`debian/patches/*` files directly. Ensure the first three lines are always
-`From`, `Date` and `Subject` just like in `git am` managed patches.
+When adding DEP3 metadata fields to patches, put them as the last lines in the
+git commit message on the `pq` branch. In the `debian/patches/*`files the
+first three lines need to be exactly `From`, `Date` and `Subject`,
+just like in `git am` managed patches.
 
 Remember that if you did more than just refreshed patches, you should save those
 changes in separate git commits. Remember to build the package, run autopkgtests
-and conduct other appropriate testing. Easiest way to do it is with:
+and conduct other appropriate testing. For git-buildpackage the basic command is:
+
+      gbp buildpackage
+
+Alternatively you can use Debcraft and run git-buildpackage inside hermetic
+containers created by it:
 
     debcraft validate
     debcraft build
@@ -199,8 +204,9 @@ your fork so it can run the CI. However, merging the MR will only merge one
 branch (`debian/latest`) so the Debian maintainer will need to push the other
 branches to the Debian packaging git repository manually with `git push`. It is
 not a problem though, as the upstream import is mechanical for the
-`upstream/latest` and `pristine-tar` branches. Only the `debian/latest` branch
-has changes that warrant a review and potentially new revisions.
+`upstream/latest` and `pristine-tar` branches and thus not a topic to be debated
+ in a code review. Only the `debian/latest` branch has changes that warrant
+ a review and potentially new revisions.
 
 
 ## Uploading a new release
