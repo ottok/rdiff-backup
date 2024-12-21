@@ -2,19 +2,21 @@ Source: rdiff-backup
 Section: utils
 Priority: optional
 Maintainer: Debian Python Team <team+python@tracker.debian.org>
-Uploaders: Otto Kekäläinen <otto@debian.org>,
-           Pablo Mestre Drake <pmdcuba@gmail.com>
-Build-Depends: asciidoctor,
-               debhelper-compat (= 13),
-               dh-python,
-               librsync-dev,
-               python3-all-dev,
-               python3-pylibacl,
-               python3-pyxattr,
-               python3-setuptools,
-               python3-setuptools-scm,
-               python3-yaml
-Standards-Version: 4.6.2
+Uploaders:
+ Otto Kekäläinen <otto@debian.org>,
+ Pablo Mestre Drake <pmdcuba@gmail.com>,
+Build-Depends:
+ asciidoctor,
+ debhelper-compat (= 13),
+ dh-python,
+ librsync-dev,
+ python3-all-dev,
+ python3-pylibacl,
+ python3-pyxattr,
+ python3-setuptools,
+ python3-setuptools-scm,
+ python3-yaml,
+Standards-Version: 4.7.0
 Homepage: https://rdiff-backup.net/
 Vcs-Git: https://salsa.debian.org/python-team/applications/rdiff-backup.git
 Vcs-Browser: https://salsa.debian.org/python-team/applications/rdiff-backup
@@ -22,12 +24,14 @@ Rules-Requires-Root: no
 
 Package: rdiff-backup
 Architecture: any
-Depends: python3-setuptools,
-         ${misc:Depends},
-         ${python3:Depends},
-         ${shlibs:Depends}
-Recommends: python3-pylibacl,
-            python3-pyxattr
+Depends:
+ python3-setuptools,
+ ${misc:Depends},
+ ${python3:Depends},
+ ${shlibs:Depends},
+Recommends:
+ python3-pylibacl,
+ python3-pyxattr,
 Description: remote incremental backup
  rdiff-backup backs up one directory to another, possibly over a network. The
  target directory ends up a copy of the source directory, but extra reverse

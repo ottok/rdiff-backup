@@ -14,5 +14,3 @@ rdiff-backup (2.0.5-2) unstable; urgency=medium
     convenience.
 
  -- Samuel Thibault <sthibault@debian.org>  Sun, 27 Jun 2021 22:47:12 +0200
-
-

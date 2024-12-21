@@ -1,19 +1,46 @@
-Tests: smoke
-Depends: rdiff-backup
-Restrictions: allow-stderr, superficial
+Tests:
+ smoke,
+Depends:
+ rdiff-backup,
+Restrictions:
+ allow-stderr,
+ superficial,
 
-Tests: version
-Depends: @
-Restrictions: allow-stderr
+Tests:
+ version,
+Depends:
+ @,
+Restrictions:
+ allow-stderr,
 
-Tests: unit
-Depends: @, python3-pytest, rdiff, procps
-Restrictions: allow-stderr
+Tests:
+ unit,
+Depends:
+ procps,
+ python3-pytest,
+ rdiff,
+ @,
+Restrictions:
+ allow-stderr,
 
-Tests: files
-Depends: @, wget, ca-certificates
-Restrictions: isolation-machine, needs-root, needs-internet, allow-stderr
+Tests:
+ files,
+Depends:
+ ca-certificates,
+ wget,
+ @,
+Restrictions:
+ allow-stderr,
+ isolation-machine,
+ needs-internet,
+ needs-root,
 
-Tests: fs
-Depends: @, python3-pylibacl, python3-pyxattr
-Restrictions: allow-stderr, flaky
+Tests:
+ fs,
+Depends:
+ python3-pylibacl,
+ python3-pyxattr,
+ @,
+Restrictions:
+ allow-stderr,
+ flaky,
