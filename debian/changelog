@@ -1,3 +1,11 @@
+rdiff-backup (2.2.6-3) unstable; urgency=medium
+
+  * Team upload.
+  * Remove the runtime dependency on python3-setuptools,
+    src/rdiff_backup/Globals.py uses importlib.metadata nowadays.
+
+ -- Alexandre Detiste <tchet@debian.org>  Mon, 27 Jan 2025 12:59:28 +0100
+
 rdiff-backup (2.2.6-2) unstable; urgency=medium
 
   [ Sébastien Villemot ]
