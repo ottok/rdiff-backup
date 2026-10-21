@@ -1,10 +1,18 @@
-rdiff-backup (2.2.7-1) UNRELEASED; urgency=medium
+rdiff-backup (2.2.7-1) unstable; urgency=medium
 
   * New upstream release 2.2.7 with multiple bugfixes as described at
     https://github.com/rdiff-backup/rdiff-backup/releases/tag/v2.2.7
   * Update d/watch to use uscan v5 format
+  * Stop using pytest and run tests directly as upstream does
+  * Update debian/copyright with missing license information
+  * Install upstream changelog under canonical name
+  * Bump Debhelper version from 13 to 14
+  * Apply consistent formatting to packaging files
+  * Drop redundant `Priority: optional`
+  * Drop redundant `Rules-Requires-Root: no`
+  * Bump Debian Policy version to 4.7.4
 
- -- Otto Kekäläinen <otto@debian.org>  Wed, 21 Oct 2026 07:07:07 +0000
+ -- Otto Kekäläinen <otto@debian.org>  Wed, 21 Oct 2026 21:21:21 +0000
 
 rdiff-backup (2.2.6-3) unstable; urgency=medium
 
