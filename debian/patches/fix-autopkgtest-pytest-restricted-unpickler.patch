@@ -1,0 +1,34 @@
+From: Otto Kekäläinen <otto@debian.org>
+Date: Wed, 21 Oct 2026 08:36:00 +0000
+Subject: Fix IterTreeReducer unpickling when the test runs under pytest
+
+The restricted unpickler added in upstream commit 5a1def7 ("security: add
+restricted unpickler to whitelist allowed classes") only allows the
+IterTreeReducer test helper classes under the __main__ module. That works when
+testing/rorpitertest.py is executed directly, but in Debian CI when autopkgtest
+runs, pytest imports it as the module "rorpitertest", causing
+TreeReducerTest.testTreeReducerState to fail with:
+
+  _pickle.UnpicklingError: 'rorpitertest.ITRBadder' is neither in the
+  allowed whitelist nor a builtin exception
+
+Whitelist the module-qualified test helper classes as well so that the
+Debian autopkgtest unit test can run the file through pytest.
+
+Forwarded: https://github.com/rdiff-backup/rdiff-backup/issues/1131
+---
+ src/rdiffbackup/utils/pickle.py | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/src/rdiffbackup/utils/pickle.py b/src/rdiffbackup/utils/pickle.py
+index b620ce0..fab79c2 100644
+--- a/src/rdiffbackup/utils/pickle.py
++++ b/src/rdiffbackup/utils/pickle.py
+@@ -79,6 +79,8 @@ class RestrictedUnpickler(_pickle.Unpickler):
+         # Required for test.
+         "__main__.ITRBadder",
+         "__main__.ITRBadder2",
++        "rorpitertest.ITRBadder",
++        "rorpitertest.ITRBadder2",
+         "rdiff_backup.rorpiter.IterTreeReducer",
+     }
