@@ -1,3 +1,5 @@
-version=4
-opts=filenamemangle=s/.+\/v?([0-9\.]+)\.tar\.gz/rdiff-backup-$1\.tar\.gz/ \
-  https://github.com/rdiff-backup/rdiff-backup/tags .*/v?([0-9\.]+)\.tar\.gz
+Version: 5
+
+Template: GitHub
+Dist: https://github.com/rdiff-backup/rdiff-backup
+Version-Type: STABLE_VERSION
