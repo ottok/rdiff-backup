@@ -6,9 +6,9 @@ Uploaders:
  Otto Kekäläinen <otto@debian.org>,
  Pablo Mestre Drake <pmdcuba@gmail.com>,
 Build-Depends:
- asciidoctor,
  debhelper-compat (= 13),
  dh-python,
+ asciidoctor,
  librsync-dev,
  python3-all-dev,
  python3-pylibacl,
