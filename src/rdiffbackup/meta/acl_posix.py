@@ -363,6 +363,10 @@ def get_acl_lists_from_rp(rp):
     except OSError as exc:
         if exc.errno == errno.EOPNOTSUPP:
             acl = None
+        elif exc.errno == errno.EIO:
+            log.Log("Unable to read default ACL from path {pa} due to "
+                    "exception '{ex}'".format(pa=rp, ex=exc), log.NOTE)
+            acl = None
         else:
             raise
     if rp.isdir():
@@ -469,7 +473,6 @@ def _list_to_acl(entry_list, map_names=1):
 
     def warn_drop(name):
         """Warn about acl with name getting dropped"""
-        global dropped_acl_names
         if Globals.never_drop_acls:
             log.Log.FatalError("--never-drop-acls specified but cannot map "
                                "ACL name {an}".format(an=name))
