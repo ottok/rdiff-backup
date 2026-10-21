@@ -1,6 +1,5 @@
 Source: rdiff-backup
 Section: utils
-Priority: optional
 Maintainer: Debian Python Team <team+python@tracker.debian.org>
 Uploaders:
  Otto Kekäläinen <otto@debian.org>,
