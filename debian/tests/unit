@@ -2,19 +2,23 @@
 
 set -ex
 
-# Setup test environment
+# This must run first to setup tests and create build/testfiles
 python3 testing/commontest.py
 
-python3 -m pytest \
-    testing/*_test.py \
-    testing/ctest.py \
-    testing/errorsrecovertest.py \
-    testing/iterfiletest.py \
-    testing/librsynctest.py \
-    testing/rorpitertest.py \
-    testing/rdb_arguments.py \
-    testing/setconnectionstest.py \
-    testing/timetest.py \
-    testing/user_grouptest.py
-
-python3 testing/hashtest.py
+# Subset of the currently available 38 tests, chosen to have enough coverage but
+# not trigger on things that might be flaky when running in autopkgtest
+for test in \
+  testing/*_test.py \
+  testing/ctest.py \
+  testing/errorsrecovertest.py \
+  testing/hashtest.py \
+  testing/iterfiletest.py \
+  testing/librsynctest.py \
+  testing/rdb_arguments.py \
+  testing/rorpitertest.py \
+  testing/setconnectionstest.py \
+  testing/timetest.py \
+  testing/user_grouptest.py
+do
+  python3 "${test}"
+done

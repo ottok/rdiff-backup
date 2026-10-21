@@ -17,7 +17,6 @@ Tests:
  unit,
 Depends:
  procps,
- python3-pytest,
  rdiff,
  @,
 Restrictions:
