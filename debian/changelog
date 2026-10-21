@@ -1,3 +1,11 @@
+rdiff-backup (2.2.7-1) UNRELEASED; urgency=medium
+
+  * New upstream release 2.2.7 with multiple bugfixes as described at
+    https://github.com/rdiff-backup/rdiff-backup/releases/tag/v2.2.7
+  * Update d/watch to use uscan v5 format
+
+ -- Otto Kekäläinen <otto@debian.org>  Wed, 21 Oct 2026 07:07:07 +0000
+
 rdiff-backup (2.2.6-3) unstable; urgency=medium
 
   * Team upload.
