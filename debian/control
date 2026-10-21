@@ -7,7 +7,8 @@ Uploaders:
  Pablo Mestre Drake <pmdcuba@gmail.com>,
 Build-Depends:
  asciidoctor,
- debhelper-compat (= 13),
+ debhelper-compat (= 14),
+ dh-sequence-single-binary,
  dh-python,
  librsync-dev,
  python3-all-dev,
@@ -25,7 +26,6 @@ Rules-Requires-Root: no
 Package: rdiff-backup
 Architecture: any
 Depends:
- ${misc:Depends},
  ${python3:Depends},
  ${shlibs:Depends},
 Recommends:
