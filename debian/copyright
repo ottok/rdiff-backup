@@ -5,7 +5,28 @@ Source: https://github.com/rdiff-backup/rdiff-backup
 
 Files: *
 Copyright: 2001-2008 Ben Escoto <bescoto@stanford.edu>
+           2005 Dean Gaudet
+           2008 Fred Gansevles <fred@betterbe.com>
+           2021-2022 the rdiff-backup project
+           2022 Eric Lavarde
 License: GPL-2+
+
+Files: src/rdiff_backup/run_delete.py
+Copyright: 2020 Patrik Dufresne <info@patrikdufresne.com>
+License: GPL-3+
+
+Files: tools/misc/rdiff-backup-wrap
+Copyright: 2020 Patrik Dufresne <patrik@ikus-soft.com>
+License: GPL-3+
+
+Files: tools/misc/rdiff-backup-regress.adoc
+       tools/misc/rdiff-backup-regress.sh
+Copyright: 2016 Dominic Raferd
+License: Apache-2.0
+
+Files: tools/windows/roles/*
+Copyright: 2014, 2016 Bert Van Vreckem <bert.vanvreckem@gmail.com>
+License: BSD-2-clause
 
 Files: debian/*
 Copyright: 2005-2009 Daniel Baumann <daniel@debian.org>
@@ -16,3 +37,33 @@ License: GPL-2+
 License: GPL-2+
  On Debian based systems the full text of the GNU General Public License version
  2 can be found in the file `/usr/share/common-licenses/GPL-2`.
+
+License: GPL-3+
+ On Debian based systems the full text of the GNU General Public License version
+ 3 can be found in the file `/usr/share/common-licenses/GPL-3`.
+
+License: Apache-2.0
+ On Debian based systems the full text of the Apache License version 2.0 can be
+ found in the file `/usr/share/common-licenses/Apache-2.0`.
+
+License: BSD-2-clause
+ Redistribution and use in source and binary forms, with or without
+ modification, are permitted provided that the following conditions are met:
+ .
+ 1. Redistributions of source code must retain the above copyright notice, this
+    list of conditions and the following disclaimer.
+ .
+ 2. Redistributions in binary form must reproduce the above copyright notice,
+    this list of conditions and the following disclaimer in the documentation
+    and/or other materials provided with the distribution.
+ .
+ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
